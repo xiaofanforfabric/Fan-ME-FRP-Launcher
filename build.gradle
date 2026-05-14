@@ -1,5 +1,8 @@
 plugins {
     id 'java'
+    id 'application'
+    id 'org.openjfx.javafxplugin' version '0.1.0'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
 }
 
 group = 'com.xiaofan'
@@ -9,9 +12,61 @@ repositories {
     mavenCentral()
 }
 
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(21)
+    }
+}
+
+javafx {
+    version = '21'
+    modules = ['javafx.controls', 'javafx.web', 'javafx.swing']
+}
+
 dependencies {
+    // 纯 Java HTML 解析器 - 用于自定义渲染
+    implementation 'net.sourceforge.htmlunit:htmlunit:2.70.0'
+    
+    // JSON 处理
+    implementation 'com.google.code.gson:gson:2.10.1'
+    
+    // HTTP 客户端
+    implementation 'org.apache.httpcomponents.client5:httpclient5:5.2.1'
+    
+    // 日志
+    implementation 'ch.qos.logback:logback-classic:1.4.14'
+    
+    // BouncyCastle - TLS 安全提供者（兼容自签名证书）
+    implementation 'org.bouncycastle:bcprov-jdk18on:1.78.1'
+    implementation 'org.bouncycastle:bctls-jdk18on:1.78.1'
+    
+    // JNA - 调用 Go 编译的 frpc DLL（仅 Windows/Linux，Android 不用 JNA）
+    implementation 'net.java.dev.jna:jna:5.14.0'
+    
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+application {
+    mainClass = 'com.xiaofan.launcher.Main'
+    applicationDefaultJvmArgs = [
+        '-Xms256m',
+        '-Xmx1024m',
+        '--add-exports=javafx.base/com.sun.javafx.runtime=ALL-UNNAMED',
+        '--add-exports=javafx.graphics/com.sun.javafx.application=ALL-UNNAMED'
+    ]
+}
+
+shadowJar {
+    archiveBaseName.set('Fan-ME-FRP-Launcher')
+    archiveClassifier.set('')
+    archiveVersion.set('1.0')
+    mergeServiceFiles()
+    manifest {
+        attributes(
+            'Main-Class': 'com.xiaofan.launcher.Main'
+        )
+    }
 }
 
 test {

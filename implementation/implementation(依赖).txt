@@ -1,0 +1,2 @@
+frpJNA依赖在https://github.com/xiaofanforfabric/frpc-jna
+frpJNA implementation AT https://github.com/xiaofanforfabric/frpc-jna
