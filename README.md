@@ -102,6 +102,10 @@ Fan-ME-FRP-Launcher/
 - [MEFrp API 文档](API.md)
 - [FRP 项目](https://github.com/fatedier/frp)
 
+## 贡献者
+
+- **xiaofan** — 后端开发者，项目所有者
+
 ## 许可证
 
 本项目基于 [Apache License 2.0](LICENSE) 开源。

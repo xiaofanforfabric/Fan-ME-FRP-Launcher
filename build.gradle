@@ -43,9 +43,25 @@ dependencies {
     // JNA - 调用 Go 编译的 frpc DLL（仅 Windows/Linux，Android 不用 JNA）
     implementation 'net.java.dev.jna:jna:5.14.0'
     
+    // JavaFX 运行时依赖 - 确保 shadowJar 打包时包含 JavaFX 类
+    // 使用 runtimeOnly 避免编译时干扰，但打包时包含
+    runtimeOnly "org.openjfx:javafx-controls:21:win"
+    runtimeOnly "org.openjfx:javafx-controls:21:linux"
+    runtimeOnly "org.openjfx:javafx-web:21:win"
+    runtimeOnly "org.openjfx:javafx-web:21:linux"
+    runtimeOnly "org.openjfx:javafx-swing:21:win"
+    runtimeOnly "org.openjfx:javafx-swing:21:linux"
+    runtimeOnly "org.openjfx:javafx-graphics:21:win"
+    runtimeOnly "org.openjfx:javafx-graphics:21:linux"
+    // base 模块（纯 Java，无 native）
+    runtimeOnly "org.openjfx:javafx-base:21:win"
+    runtimeOnly "org.openjfx:javafx-base:21:linux"
+    
     testImplementation platform('org.junit:junit-bom:5.10.0')
     testImplementation 'org.junit.jupiter:junit-jupiter'
 }
+
+
 
 application {
     mainClass = 'com.xiaofan.launcher.Main'

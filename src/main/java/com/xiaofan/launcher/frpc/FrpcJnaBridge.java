@@ -29,6 +29,11 @@ public class FrpcJnaBridge {
         String FrpcGetLastError();
         void FrpcFreeString(String str);
         void FrpcSetLogLevel(String level);
+        // 多实例接口
+        int FrpcStartWithId(int id, String configPath);
+        int FrpcStopWithId(int id);
+        int FrpcIsRunningWithId(int id);
+        int FrpcStopAll();
     }
 
     /**
@@ -159,6 +164,91 @@ public class FrpcJnaBridge {
             jna.FrpcSetLogLevel(level);
         } catch (Exception e) {
             LOG.warning("设置日志级别失败: " + e.getMessage());
+        }
+    }
+
+    // ====== 多实例接口 ======
+
+    /**
+     * 启动 frpc 实例（多实例模式）
+     * @param configPath 配置文件路径
+     * @return 实例 ID（>=0），失败返回 -1
+     */
+    public static int startWithId(String configPath) {
+        if (!loaded || jna == null) {
+            LOG.severe("JNA 未初始化，无法启动 frpc");
+            return -1;
+        }
+
+        try {
+            int result = jna.FrpcStartWithId(0, configPath);
+            if (result == 0) {
+                LOG.info("frpc 多实例启动成功");
+                return 0;
+            } else {
+                String error = jna.FrpcGetLastError();
+                LOG.severe("frpc 多实例启动失败: " + (error != null ? error : "未知错误"));
+                return -1;
+            }
+        } catch (Exception e) {
+            LOG.severe("frpc 多实例启动异常: " + e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
+     * 停止指定 ID 的 frpc 实例
+     * @param instanceId 实例 ID
+     * @return true 如果停止成功
+     */
+    public static boolean stopWithId(int instanceId) {
+        if (!loaded || jna == null) {
+            return true;
+        }
+
+        try {
+            int result = jna.FrpcStopWithId(instanceId);
+            LOG.info("frpc 实例 #" + instanceId + " 停止" + (result == 0 ? "成功" : "失败"));
+            return result == 0;
+        } catch (Exception e) {
+            LOG.warning("frpc 实例 #" + instanceId + " 停止异常: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 检查指定 ID 的 frpc 实例是否在运行
+     * @param instanceId 实例 ID
+     * @return true 如果正在运行
+     */
+    public static boolean isRunningWithId(int instanceId) {
+        if (!loaded || jna == null) {
+            return false;
+        }
+
+        try {
+            return jna.FrpcIsRunningWithId(instanceId) == 1;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 停止所有 frpc 实例
+     * @return true 如果全部停止成功
+     */
+    public static boolean stopAll() {
+        if (!loaded || jna == null) {
+            return true;
+        }
+
+        try {
+            int result = jna.FrpcStopAll();
+            LOG.info("frpc 全部实例停止" + (result == 0 ? "成功" : "失败"));
+            return result == 0;
+        } catch (Exception e) {
+            LOG.warning("frpc 全部实例停止异常: " + e.getMessage());
+            return false;
         }
     }
 }

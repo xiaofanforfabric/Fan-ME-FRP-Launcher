@@ -6,12 +6,16 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Scanner;
 
 /**
@@ -32,8 +36,8 @@ public class DependencyManager {
     private static final String OSS_DONATE_URL = "https://oss.xiaoli.top/";
     private static final String RES_DIR_NAME = "res";
     private static final int MAX_RETRY = 3;
-    private static final int CONNECT_TIMEOUT = 5000;
-    private static final int READ_TIMEOUT = 10000;
+    private static final int CONNECT_TIMEOUT = 3000;
+    private static final int READ_TIMEOUT = 5000;
 
     // 系统信息
     public static class SystemInfo {
@@ -85,31 +89,62 @@ public class DependencyManager {
     // ==================== 公开入口 ====================
 
     /**
-     * 运行依赖管理器完整流程
+     * 运行依赖管理器完整流程（非交互模式）
+     * 自动选择第一个可用节点，不询问用户
+     * 适用于 GUI 模式下的后台自动初始化
      * 
-     * 首次启动（无 res/）:
-     *   1. 创建 res/ 目录
-     *   2. 检测系统信息
-     *   3. 测试节点 → 用户选择
-     *   4. 下载 v.txt
-     *   5. 下载 frpc 二进制/动态库
-     * 
-     * 已有 res/:
-     *   1. 检测系统信息
-     *   2. 读取本地 v.txt
-     *   3. 测试节点 → 用户选择
-     *   4. 获取云端 v.txt
-     *   5. 对比版本号决定是否更新
-     *      - 版本一致 → 直接启动
-     *      - 正式版更新 → 自动下载
-     *      - 开发/测试版 → 询问用户
-     *   6. 如需更新 → 下载 frpc 和 v.txt
+     * @return true 如果准备就绪
+     */
+    public boolean runNonInteractive() {
+        try {
+            detectSystem();
+            System.out.println("系统信息: " + systemInfo);
+
+            if (systemInfo.isAndroid) {
+                System.out.println("\n===== 此设备运行于 Android/Termux 环境 =====");
+                System.out.println("===== 警告: 功能可能不受完全支持 =====");
+                System.out.println("===== 将使用 frpc 二进制文件直接启动 =====");
+            }
+
+            boolean isFirstRun = !Files.exists(resDir);
+            ensureResDir();
+
+            System.out.println("测试下载节点...");
+            List<NodeInfo> nodes = testNodes();
+            if (nodes.isEmpty()) {
+                System.err.println("错误: 所有节点均不可用");
+                return false;
+            }
+            // 非交互模式：自动选择第一个可用节点
+            NodeInfo selected = nodes.get(0);
+            System.out.println("已自动选择节点: " + selected.url);
+            System.out.println("  " + selected.description);
+            selectedNode = selected.url;
+
+            if (isFirstRun) {
+                // ===== 情况1: res 目录不存在 → 完整下载所有依赖 =====
+                System.out.println("首次启动，正在初始化运行环境...");
+                return fullDownload(selectedNode);
+            }
+
+            // ===== 情况2: res 目录已存在 → 版本检查 + 完整性校验 =====
+            return handleExistingRes(selected, false);
+
+        } catch (Exception e) {
+            System.err.println("依赖管理器运行失败: " + e.getMessage());
+            e.printStackTrace();
+            return false;
+        }
+    }
+
+    /**
+     * 运行依赖管理器完整流程（交互模式）
      * 
      * @return true 如果准备就绪
      */
     public boolean run() {
         try {
-            // 1. 检测系统信息（需要在任何流程之前，Android 要显示警告）
+            // 1. 检测系统信息
             detectSystem();
             System.out.println("系统信息: " + systemInfo);
 
@@ -138,62 +173,15 @@ public class DependencyManager {
             }
             selectedNode = selected.url;
 
-            // 5. 处理版本检查
-            Path frpcLib = resDir.resolve(systemInfo.libName);
-            boolean needFrpcDownload = false;
-
             if (isFirstRun) {
-                // 首次启动：没有 res/ 目录，直接下载 v.txt + frpc
+                // ===== 情况1: res 目录不存在 → 完整下载所有依赖 =====
                 System.out.println("首次启动，正在初始化运行环境...");
-                needFrpcDownload = true;
-
-                // 先下载 v.txt
-                if (!VersionChecker.downloadVtxt(selectedNode, resDir)) {
-                    System.err.println("警告: 无法下载 v.txt，将仅下载 frpc 文件");
-                }
-
-            } else {
-                // 已有 res/ 目录，检查版本
-                VersionChecker.VersionInfo localVer = VersionChecker.readLocalVersion(resDir);
-                VersionChecker.VersionInfo remoteVer = VersionChecker.fetchRemoteVersion(selectedNode);
-
-                if (localVer != null && remoteVer != null) {
-                    VersionChecker.UpdateDecision decision = VersionChecker.checkAndDecide(
-                        localVer, remoteVer, resDir, selectedNode);
-
-                    if (!decision.shouldLaunch) {
-                        return false;
-                    }
-
-                    if (decision.shouldUpdate) {
-                        needFrpcDownload = true;
-                    }
-                } else {
-                    // 无法获取版本信息，回退到文件存在性检查
-                    needFrpcDownload = !Files.exists(frpcLib);
-                    if (!needFrpcDownload) {
-                        System.out.println("本地已存在: " + frpcLib.toAbsolutePath());
-                    }
-                }
+                return fullDownload(selectedNode);
             }
 
-            // 6. 需要下载 frpc
-            if (needFrpcDownload) {
-                if (!downloadLibrary(selectedNode, systemInfo.libName, frpcLib)) {
-                    return false;
-                }
-                // 下载 frpc 后，确保 v.txt 是最新的
-                if (!Files.exists(resDir.resolve("v.txt"))) {
-                    VersionChecker.downloadVtxt(selectedNode, resDir);
-                }
-            }
+            // ===== 情况2: res 目录已存在 → 版本检查 + 完整性校验 =====
+            return handleExistingRes(selected, true);
 
-            // 7. 启动前依赖完整性检查：检查所有必需文件，缺失自动补下
-            if (!verifyDependencies(selectedNode)) {
-                return false;
-            }
-
-            return true;
         } catch (Exception e) {
             System.err.println("依赖管理器运行失败: " + e.getMessage());
             e.printStackTrace();
@@ -202,67 +190,334 @@ public class DependencyManager {
     }
 
     /**
-     * 启动前依赖完整性检查
-     * 逐个检查 res/ 下所有必需文件，缺失则自动重下
-     * 避免运行到一半才报错
+     * 处理 res 目录已存在的情况
+     * 1. 版本检查 → 有新正式版或用户选测试版 → 覆盖下载
+     * 2. 无更新 → 完整性校验（缺文件/文件损坏 → 覆盖下载）
      */
-    private boolean verifyDependencies(String nodeUrl) {
-        List<String> missingFiles = new ArrayList<>();
+    private boolean handleExistingRes(NodeInfo selected, boolean interactive) {
+        VersionChecker.VersionInfo localVer = VersionChecker.readLocalVersion(resDir);
+        VersionChecker.VersionInfo remoteVer = VersionChecker.fetchRemoteVersion(selectedNode);
 
-        // 检查 1: v.txt 版本文件
-        Path vtxt = resDir.resolve("v.txt");
-        if (!Files.exists(vtxt)) {
-            missingFiles.add("v.txt");
-        }
+        boolean needFullDownload = false;
 
-        // 检查 2: 当前平台的 frpc 文件
-        Path frpcLib = resDir.resolve(systemInfo.libName);
-        if (!Files.exists(frpcLib)) {
-            missingFiles.add(systemInfo.libName);
-        }
+        if (localVer != null && remoteVer != null) {
+            int cmp = remoteVer.compareTo(localVer);
 
-        if (missingFiles.isEmpty()) {
-            return true;
-        }
+            if (cmp > 0) {
+                // 云端有新版
+                System.out.println("\n发现新版本: " + remoteVer.raw + " (当前: " + localVer.raw + ")");
 
-        // 有文件缺失，打印警告并尝试自动补下
-        System.out.println("\n发现 " + missingFiles.size() + " 个依赖缺失:");
-        for (String f : missingFiles) {
-            System.out.println("  - " + f);
-        }
-        System.out.println("正在自动补充缺失的依赖...");
-
-        boolean allOk = true;
-
-        // 补下 v.txt
-        if (missingFiles.contains("v.txt")) {
-            System.out.println("  下载 v.txt...");
-            if (!VersionChecker.downloadVtxt(nodeUrl, resDir)) {
-                System.err.println("  警告: v.txt 下载失败，不影响运行但版本检查会跳过");
-                // v.txt 不是关键依赖，不影响运行
+                if (remoteVer.isRelease) {
+                    // 正式版 → 自动覆盖下载
+                    System.out.println("正式版更新，自动下载中...");
+                    needFullDownload = true;
+                } else {
+                    // dev 或 beta → 询问用户
+                    String typeName = remoteVer.isDev ? "开发版" : "测试版";
+                    if (interactive) {
+                        System.out.print("新" + typeName + "可用 (" + remoteVer.raw + ")，是否更新？(y/n): ");
+                        @SuppressWarnings("resource")
+                        Scanner scanner = new Scanner(System.in);
+                        String input = scanner.nextLine().trim().toLowerCase();
+                        if ("y".equals(input) || "yes".equals(input)) {
+                            System.out.println("用户确认更新");
+                            needFullDownload = true;
+                        } else {
+                            System.out.println("用户跳过更新，使用现有版本");
+                        }
+                    } else {
+                        // 非交互模式：dev/beta 不自动更新
+                        System.out.println("新" + typeName + "可用 (" + remoteVer.raw + ")，非交互模式跳过更新");
+                    }
+                }
+            } else if (cmp == 0) {
+                System.out.println("版本已是最新: " + localVer.raw);
             } else {
-                System.out.println("  v.txt 已下载");
+                System.out.println("本地版本 (" + localVer.raw + ") 比云端 (" + remoteVer.raw + ") 更新，跳过检查");
             }
-        }
-
-        // 补下 frpc 文件
-        if (missingFiles.contains(systemInfo.libName)) {
-            System.out.println("  下载 " + systemInfo.libName + "...");
-            if (!downloadLibrary(nodeUrl, systemInfo.libName, frpcLib)) {
-                System.err.println("  错误: " + systemInfo.libName + " 下载失败！");
-                allOk = false;
-            } else {
-                System.out.println("  " + systemInfo.libName + " 已下载");
-            }
-        }
-
-        if (allOk) {
-            System.out.println("依赖完整性检查通过\n");
         } else {
-            System.err.println("依赖完整性检查失败，部分关键文件无法下载");
+            System.out.println("无法获取版本信息（本地或云端 v.txt 缺失），将进行完整性校验");
         }
 
-        return allOk;
+        if (needFullDownload) {
+            System.out.println(">>> 开始覆盖下载所有依赖...");
+            return fullDownload(selectedNode);
+        }
+
+        // ===== 无版本更新 → 完整性校验 =====
+        System.out.println("\n>>> 正在进行文件完整性校验...");
+        IntegrityResult result = checkIntegrity();
+
+        if (result.missingFiles > 0 || result.corruptedFiles > 0) {
+            System.out.println("完整性校验发现问题:");
+            if (result.missingFiles > 0) {
+                System.out.println("  - 缺失文件数: " + result.missingFiles);
+            }
+            if (result.corruptedFiles > 0) {
+                System.out.println("  - 损坏文件数: " + result.corruptedFiles);
+            }
+            System.out.println(">>> 开始完整下载所有依赖覆盖...");
+            return fullDownload(selectedNode);
+        }
+
+        System.out.println("完整性校验通过，所有文件完好");
+        return true;
+    }
+
+    // ==================== 完整性校验 ====================
+
+    /** 完整性校验结果 */
+    private static class IntegrityResult {
+        final int missingFiles;
+        final int corruptedFiles;
+
+        IntegrityResult(int missingFiles, int corruptedFiles) {
+            this.missingFiles = missingFiles;
+            this.corruptedFiles = corruptedFiles;
+        }
+    }
+
+    /**
+     * 校验 res 目录下所有文件的完整性
+     * 读取 md5.txt，检查每个文件是否存在且 MD5 匹配
+     * 跳过 md5.txt 自身的校验
+     */
+    private IntegrityResult checkIntegrity() {
+        Path md5File = resDir.resolve("md5.txt");
+        if (!Files.exists(md5File)) {
+            System.out.println("  md5.txt 不存在，无法校验完整性");
+            return new IntegrityResult(1, 0);
+        }
+
+        // 读取 md5.txt 并解析
+        Map<String, String> expectedMd5Map = new HashMap<>();
+        try {
+            List<String> lines = Files.readAllLines(md5File, StandardCharsets.UTF_8);
+            for (String line : lines) {
+                line = line.trim();
+                if (line.isEmpty()) continue;
+                int colonIdx = line.lastIndexOf(':');
+                if (colonIdx <= 0 || colonIdx >= line.length() - 1) continue;
+                String fileName = line.substring(0, colonIdx);
+                String md5 = line.substring(colonIdx + 1);
+                expectedMd5Map.put(fileName, md5);
+            }
+        } catch (IOException e) {
+            System.err.println("  读取 md5.txt 失败: " + e.getMessage());
+            return new IntegrityResult(1, 0);
+        }
+
+        if (expectedMd5Map.isEmpty()) {
+            System.out.println("  md5.txt 为空，无法校验");
+            return new IntegrityResult(1, 0);
+        }
+
+        int missingCount = 0;
+        int corruptedCount = 0;
+
+        for (Map.Entry<String, String> entry : expectedMd5Map.entrySet()) {
+            String fileName = entry.getKey();
+            String expectedMd5 = entry.getValue();
+
+            // 跳过 md5.txt 自身的校验
+            if ("md5.txt".equals(fileName)) continue;
+
+            // 查找文件：先在 res 根目录找，再在 res/index/ 下找
+            Path filePath = resDir.resolve(fileName);
+            if (!Files.exists(filePath)) {
+                // 尝试在 index 子目录下找
+                filePath = resDir.resolve("index").resolve(fileName);
+            }
+
+            if (!Files.exists(filePath)) {
+                System.out.println("  [缺失] " + fileName);
+                missingCount++;
+                continue;
+            }
+
+            // 计算实际 MD5
+            try {
+                String actualMd5 = computeMd5(filePath);
+                if (!expectedMd5.equalsIgnoreCase(actualMd5)) {
+                    System.out.println("  [损坏] " + fileName + " (期望: " + expectedMd5 + ", 实际: " + actualMd5 + ")");
+                    corruptedCount++;
+                }
+            } catch (Exception e) {
+                System.out.println("  [校验失败] " + fileName + ": " + e.getMessage());
+                corruptedCount++;
+            }
+        }
+
+        return new IntegrityResult(missingCount, corruptedCount);
+    }
+
+    /**
+     * 计算文件的 MD5 值
+     */
+    private String computeMd5(Path filePath) throws Exception {
+        MessageDigest md = MessageDigest.getInstance("MD5");
+        byte[] buffer = new byte[8192];
+        try (InputStream is = Files.newInputStream(filePath)) {
+            int bytesRead;
+            while ((bytesRead = is.read(buffer)) != -1) {
+                md.update(buffer, 0, bytesRead);
+            }
+        }
+        byte[] digest = md.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02x", b & 0xff));
+        }
+        return sb.toString();
+    }
+
+    // ==================== 完整下载 ====================
+
+    /**
+     * 完整下载当前平台所需的依赖
+     * 只下载当前平台需要的文件，不下载其他平台的 frpc 文件
+     * md5.txt 仅作为完整性校验对照，不按它下载所有文件
+     */
+    private boolean fullDownload(String nodeUrl) {
+        System.out.println(">>> 开始下载当前平台所需依赖...");
+
+        // 1. 下载 md5.txt（校验对照文件）
+        System.out.println("\n[1/5] 下载 md5.txt...");
+        if (!downloadFile(nodeUrl, "md5.txt", resDir.resolve("md5.txt"))) {
+            System.err.println("错误: md5.txt 下载失败");
+            return false;
+        }
+
+        // 2. 下载 v.txt（版本文件）
+        System.out.println("\n[2/5] 下载 v.txt...");
+        if (!VersionChecker.downloadVtxt(nodeUrl, resDir)) {
+            System.err.println("警告: v.txt 下载失败，不影响运行但版本检查会跳过");
+        }
+
+        // 3. 下载 index.zip（前端资源包）
+        System.out.println("\n[3/5] 下载 index.zip...");
+        Path indexZip = resDir.resolve("index.zip");
+        if (!downloadFile(nodeUrl, "index.zip", indexZip)) {
+            System.err.println("警告: index.zip 下载失败，前端资源可能缺失");
+        }
+
+        // 4. 下载当前平台的 frpc 文件
+        System.out.println("\n[4/5] 下载 " + systemInfo.libName + "...");
+        Path frpcLib = resDir.resolve(systemInfo.libName);
+        if (!downloadLibrary(nodeUrl, systemInfo.libName, frpcLib)) {
+            return false;
+        }
+
+        // 5. 下载前端页面文件（index.html, 404.html）
+        System.out.println("\n[5/5] 下载前端页面文件...");
+        downloadFrontendFiles(nodeUrl);
+
+        // 6. 解压 index.zip → index/ 目录
+        if (Files.exists(indexZip)) {
+            System.out.println("\n>>> 解压 index.zip 到 index/...");
+            if (!unzipIndex(indexZip)) {
+                System.err.println("警告: index.zip 解压失败");
+            }
+        }
+
+        System.out.println("\n>>> 当前平台依赖下载完成");
+        return true;
+    }
+
+    /**
+     * 下载前端页面文件（index.html, 404.html）
+     * 这些是通用文件，所有平台都需要
+     */
+    private void downloadFrontendFiles(String nodeUrl) {
+        // 需要下载的前端文件列表
+        String[] frontendFiles = {"index.html", "404.html"};
+        for (String fileName : frontendFiles) {
+            Path target = resDir.resolve(fileName);
+            if (Files.exists(target)) {
+                System.out.println("  [已存在] " + fileName);
+                continue;
+            }
+            System.out.println("  下载 " + fileName + "...");
+            if (!downloadFile(nodeUrl, fileName, target)) {
+                System.err.println("  警告: " + fileName + " 下载失败");
+            }
+        }
+    }
+
+    /**
+     * 解压 index.zip 到 index/ 目录
+     * 使用 Java 内置的 ZipInputStream
+     */
+    private boolean unzipIndex(Path zipPath) {
+        Path indexDir = resDir.resolve("index");
+        try {
+            // 删除旧的 index 目录
+            if (Files.exists(indexDir)) {
+                Files.walk(indexDir)
+                    .sorted((a, b) -> b.compareTo(a)) // 先删子文件再删目录
+                    .map(Path::toFile)
+                    .forEach(File::delete);
+            }
+            Files.createDirectories(indexDir);
+
+            // 解压
+            try (java.util.zip.ZipInputStream zis = new java.util.zip.ZipInputStream(
+                    Files.newInputStream(zipPath))) {
+                java.util.zip.ZipEntry entry;
+                while ((entry = zis.getNextEntry()) != null) {
+                    if (entry.isDirectory()) continue;
+                    // 去掉顶层目录名（index/xxx → xxx）
+                    String entryName = entry.getName();
+                    int slashIdx = entryName.indexOf('/');
+                    String relativeName = (slashIdx >= 0) ? entryName.substring(slashIdx + 1) : entryName;
+                    if (relativeName.isEmpty()) continue;
+
+                    Path target = indexDir.resolve(relativeName);
+                    Files.createDirectories(target.getParent());
+                    try (FileOutputStream fos = new FileOutputStream(target.toFile())) {
+                        byte[] buffer = new byte[8192];
+                        int len;
+                        while ((len = zis.read(buffer)) != -1) {
+                            fos.write(buffer, 0, len);
+                        }
+                    }
+                    zis.closeEntry();
+                }
+            }
+
+            System.out.println("  解压完成: " + indexDir.toAbsolutePath());
+            long fileCount = Files.walk(indexDir).filter(Files::isRegularFile).count();
+            System.out.println("  解压文件数: " + fileCount);
+            return true;
+        } catch (Exception e) {
+            System.err.println("  解压失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 从节点下载单个文件
+     */
+    private boolean downloadFile(String nodeUrl, String fileName, Path targetPath) {
+        String downloadUrl = nodeUrl.endsWith("/") ? nodeUrl + fileName : nodeUrl + "/" + fileName;
+
+        for (int attempt = 1; attempt <= MAX_RETRY; attempt++) {
+            System.out.printf("  下载尝试 %d/%d: %s%n", attempt, MAX_RETRY, downloadUrl);
+            try {
+                if (downloadWithProgress(downloadUrl, targetPath)) {
+                    System.out.println("    完成: " + targetPath.toAbsolutePath());
+                    return true;
+                }
+            } catch (Exception e) {
+                System.err.println("    下载失败: " + e.getMessage());
+            }
+
+            if (attempt < MAX_RETRY) {
+                System.out.println("    准备重试...");
+            }
+        }
+
+        return false;
     }
 
     /**
@@ -336,7 +591,6 @@ public class DependencyManager {
 
         if (isAndroid) {
             // Android: 使用二进制可执行文件
-            // 架构名用 Android ABI 格式（arm64-v8a, armeabi-v7a, x86_64, x86）
             String androidAbi;
             switch (arch) {
                 case "arm64": androidAbi = "arm64-v8a";    break;
@@ -425,10 +679,8 @@ public class DependencyManager {
             System.out.println("不可用");
         }
 
-
         return availableNodes;
     }
-
 
     /**
      * 测试节点可用性
@@ -453,7 +705,7 @@ public class DependencyManager {
                 return false;
             }
 
-            // 仅对 xiaoli 捐赠节点启用内容检测（该 CDN 被攻击时会返回 JS 验证页但状态码 200）
+            // 仅对 xiaoli 捐赠节点启用内容检测
             if (checkContent) {
                 boolean isHtmlResponse = false;
                 try (InputStream is = conn.getInputStream()) {
@@ -483,7 +735,6 @@ public class DependencyManager {
             return false;
         }
     }
-
 
     // ==================== 4. 节点选择 ====================
 
@@ -545,8 +796,6 @@ public class DependencyManager {
 
     /**
      * 带进度显示的下载
-     * 加 User-Agent 避免 CDN 防盗链返回 HTML 验证页
-     * 下载后校验文件是否为有效的二进制（非 HTML）
      */
     private boolean downloadWithProgress(String fileUrl, Path targetPath) throws IOException {
         URL url = new URL(fileUrl);
@@ -597,10 +846,9 @@ public class DependencyManager {
             conn.disconnect();
         }
 
-        // 校验下载内容：如果是 HTML 验证页，文件太小或开头含 <!DOCTYPE 则报错
+        // 校验下载内容：如果是 HTML 验证页则报错
         long fileSize = Files.size(targetPath);
         if (fileSize < 1024) {
-            // 读前几个字节判断是否为 HTML
             byte[] header = new byte[Math.min((int) fileSize, 128)];
             try (InputStream checkIs = Files.newInputStream(targetPath)) {
                 checkIs.read(header);

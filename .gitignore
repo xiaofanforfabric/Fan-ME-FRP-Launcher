@@ -70,6 +70,12 @@ out/
 ### 运行时生成 ###
 tmp/
 
+### 前端资源 (res/index) ###
+res/index/
+
+### ME-Frp-v5-GolangSdk SDK ###
+implementation/ME-Frp-v5-GolangSdk/
+
 
 ### Go 子模块 (implementation/frp) ###
 implementation/frp
