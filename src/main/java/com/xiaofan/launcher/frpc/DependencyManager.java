@@ -248,14 +248,9 @@ public class DependencyManager {
         System.out.println("\n>>> 正在进行文件完整性校验...");
         IntegrityResult result = checkIntegrity();
 
-        if (result.missingFiles > 0 || result.corruptedFiles > 0) {
+        if (result.corruptedFiles > 0) {
             System.out.println("完整性校验发现问题:");
-            if (result.missingFiles > 0) {
-                System.out.println("  - 缺失文件数: " + result.missingFiles);
-            }
-            if (result.corruptedFiles > 0) {
-                System.out.println("  - 损坏文件数: " + result.corruptedFiles);
-            }
+            System.out.println("  - 损坏文件数: " + result.corruptedFiles);
             System.out.println(">>> 开始完整下载所有依赖覆盖...");
             return fullDownload(selectedNode);
         }
@@ -268,25 +263,24 @@ public class DependencyManager {
 
     /** 完整性校验结果 */
     private static class IntegrityResult {
-        final int missingFiles;
         final int corruptedFiles;
 
-        IntegrityResult(int missingFiles, int corruptedFiles) {
-            this.missingFiles = missingFiles;
+        IntegrityResult(int corruptedFiles) {
             this.corruptedFiles = corruptedFiles;
         }
     }
 
     /**
-     * 校验 res 目录下所有文件的完整性
-     * 读取 md5.txt，检查每个文件是否存在且 MD5 匹配
-     * 跳过 md5.txt 自身的校验
+     * 校验已存在文件的完整性
+     * 读取 md5.txt 作为对照表，只校验本地已存在的文件是否被篡改/损坏
+     * md5.txt 中列出的文件如果本地不存在，则跳过（不视为缺失）
+     * 文件是否缺失由 checkRequiredFiles() 判断
      */
     private IntegrityResult checkIntegrity() {
         Path md5File = resDir.resolve("md5.txt");
         if (!Files.exists(md5File)) {
             System.out.println("  md5.txt 不存在，无法校验完整性");
-            return new IntegrityResult(1, 0);
+            return new IntegrityResult(0);
         }
 
         // 读取 md5.txt 并解析
@@ -304,15 +298,14 @@ public class DependencyManager {
             }
         } catch (IOException e) {
             System.err.println("  读取 md5.txt 失败: " + e.getMessage());
-            return new IntegrityResult(1, 0);
+            return new IntegrityResult(0);
         }
 
         if (expectedMd5Map.isEmpty()) {
             System.out.println("  md5.txt 为空，无法校验");
-            return new IntegrityResult(1, 0);
+            return new IntegrityResult(0);
         }
 
-        int missingCount = 0;
         int corruptedCount = 0;
 
         for (Map.Entry<String, String> entry : expectedMd5Map.entrySet()) {
@@ -329,9 +322,8 @@ public class DependencyManager {
                 filePath = resDir.resolve("index").resolve(fileName);
             }
 
+            // 文件不存在则跳过（md5.txt 只是对照表，不是文件清单）
             if (!Files.exists(filePath)) {
-                System.out.println("  [缺失] " + fileName);
-                missingCount++;
                 continue;
             }
 
@@ -348,7 +340,7 @@ public class DependencyManager {
             }
         }
 
-        return new IntegrityResult(missingCount, corruptedCount);
+        return new IntegrityResult(corruptedCount);
     }
 
     /**
@@ -746,25 +738,55 @@ public class DependencyManager {
             return nodes.get(0);
         }
 
-        System.out.println("\n请选择下载节点:");
+        System.out.println("\n请选择下载节点 (5秒内输入编号，超时将自动选择):");
         Scanner scanner = new Scanner(System.in);
         for (int i = 0; i < nodes.size(); i++) {
             NodeInfo n = nodes.get(i);
             System.out.printf("  %d. %s (%s)%n", i + 1, n.description, n.url);
         }
         System.out.print("请输入编号 (1-" + nodes.size() + "): ");
+        System.out.flush();
 
-        try {
-            int choice = Integer.parseInt(scanner.nextLine().trim());
-            if (choice >= 1 && choice <= nodes.size()) {
-                System.out.println("已选择: " + nodes.get(choice - 1).description);
-                return nodes.get(choice - 1);
+        // 使用带超时的输入读取
+        String input = readLineWithTimeout(scanner, 5000);
+
+        if (input != null) {
+            try {
+                int choice = Integer.parseInt(input.trim());
+                if (choice >= 1 && choice <= nodes.size()) {
+                    System.out.println("已选择: " + nodes.get(choice - 1).description);
+                    return nodes.get(choice - 1);
+                }
+            } catch (NumberFormatException ignored) {
             }
-        } catch (NumberFormatException ignored) {
+            System.out.println("输入无效，默认选择: " + nodes.get(0).description);
+        } else {
+            System.out.println("\n等待超时，自动选择: " + nodes.get(0).description);
         }
 
-        System.out.println("输入无效，默认选择: " + nodes.get(0).description);
         return nodes.get(0);
+    }
+
+    /**
+     * 带超时的控制台输入读取
+     * @param scanner Scanner 对象
+     * @param timeoutMs 超时时间（毫秒）
+     * @return 用户输入，超时返回 null
+     */
+    private String readLineWithTimeout(Scanner scanner, long timeoutMs) {
+        try {
+            // 使用 System.in.available() 检测是否有输入可用
+            long startTime = System.currentTimeMillis();
+            while (System.currentTimeMillis() - startTime < timeoutMs) {
+                if (System.in.available() > 0) {
+                    return scanner.nextLine();
+                }
+                Thread.sleep(100);
+            }
+        } catch (Exception e) {
+            // 超时或异常，返回 null
+        }
+        return null;
     }
 
     // ==================== 5. 下载 ====================
