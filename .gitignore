@@ -70,8 +70,8 @@ out/
 ### 运行时生成 ###
 tmp/
 
-### 前端资源 (res/index) ###
-res/index/
+### 前端资源备份 (res/index) ###
+res/bak/
 
 ### ME-Frp-v5-GolangSdk SDK ###
 implementation/ME-Frp-v5-GolangSdk/
