@@ -34,6 +34,7 @@ public class DependencyManager {
     private static final String OSS_BASE_URL = "http://oss.xiaofanshop.cn/";
     private static final String OSS_CF_R2_URL = "https://oss.cf.xiaofanshop.cn/";
     private static final String OSS_DONATE_URL = "https://oss.xiaoli.top/";
+    private static final String OSS_ALLIANCE_URL = "https://alist.yealqp.cn/download/Fan-ME-FRP-Launcher/";
     private static final String RES_DIR_NAME = "res";
     private static final int MAX_RETRY = 3;
     private static final int CONNECT_TIMEOUT = 3000;
@@ -115,8 +116,8 @@ public class DependencyManager {
                 System.err.println("错误: 所有节点均不可用");
                 return false;
             }
-            // 非交互模式：自动选择第一个可用节点
-            NodeInfo selected = nodes.get(0);
+            // 非交互模式：加权随机选择（联盟60%，官方40%）
+            NodeInfo selected = autoSelectNode(nodes);
             System.out.println("已自动选择节点: " + selected.url);
             System.out.println("  " + selected.description);
             selectedNode = selected.url;
@@ -671,6 +672,15 @@ public class DependencyManager {
             System.out.println("不可用");
         }
 
+        // 测试第三方客户端联盟节点（yealqp）
+        System.out.print("  测试节点 4 [第三方客户端联盟]: " + OSS_ALLIANCE_URL + " ... ");
+        if (testNode(OSS_ALLIANCE_URL, false)) {
+            System.out.println("OK");
+            availableNodes.add(new NodeInfo(OSS_ALLIANCE_URL, "第三方客户端联盟节点（yealqp）"));
+        } else {
+            System.out.println("不可用");
+        }
+
         return availableNodes;
     }
 
@@ -730,6 +740,57 @@ public class DependencyManager {
 
     // ==================== 4. 节点选择 ====================
 
+    /**
+     * 加权随机选择节点
+     * 联盟节点（OSS_ALLIANCE_URL）权重 60%，官方 CF 穿透节点（OSS_BASE_URL）权重 40%
+     * 如果其中一个不可用，自动选健康的那个
+     * 如果两个都不可用或都不在列表中，从所有可用节点中随机选
+     */
+    private NodeInfo autoSelectNode(List<NodeInfo> nodes) {
+        if (nodes == null || nodes.isEmpty()) return null;
+        if (nodes.size() == 1) return nodes.get(0);
+
+        // 查找联盟节点和官方节点在列表中的位置
+        int allianceIdx = -1;
+        int officialIdx = -1;
+        for (int i = 0; i < nodes.size(); i++) {
+            String url = nodes.get(i).url;
+            if (url.equals(OSS_ALLIANCE_URL)) {
+                allianceIdx = i;
+            } else if (url.equals(OSS_BASE_URL)) {
+                officialIdx = i;
+            }
+        }
+
+        boolean allianceAvailable = allianceIdx >= 0;
+        boolean officialAvailable = officialIdx >= 0;
+
+        if (allianceAvailable && officialAvailable) {
+            // 两个都健康：联盟60%，官方40%
+            int roll = (int)(Math.random() * 100);
+            if (roll < 60) {
+                System.out.println("加权随机选择 → 第三方客户端联盟节点（60%权重）");
+                return nodes.get(allianceIdx);
+            } else {
+                System.out.println("加权随机选择 → 官方 CF 穿透节点（40%权重）");
+                return nodes.get(officialIdx);
+            }
+        } else if (allianceAvailable) {
+            // 仅联盟可用
+            System.out.println("官方节点不可用，自动选择第三方客户端联盟节点");
+            return nodes.get(allianceIdx);
+        } else if (officialAvailable) {
+            // 仅官方可用
+            System.out.println("联盟节点不可用，自动选择官方 CF 穿透节点");
+            return nodes.get(officialIdx);
+        }
+
+        // 都不在列表中，随机选一个
+        int randomIdx = (int)(Math.random() * nodes.size());
+        System.out.println("随机选择节点: " + nodes.get(randomIdx).description);
+        return nodes.get(randomIdx);
+    }
+
     private NodeInfo selectNode(List<NodeInfo> nodes) {
         if (nodes.isEmpty()) return null;
         if (nodes.size() == 1) {
@@ -738,7 +799,7 @@ public class DependencyManager {
             return nodes.get(0);
         }
 
-        System.out.println("\n请选择下载节点 (5秒内输入编号，超时将自动选择):");
+        System.out.println("\n请选择下载节点 (10秒内输入编号，超时将自动选择):");
         Scanner scanner = new Scanner(System.in);
         for (int i = 0; i < nodes.size(); i++) {
             NodeInfo n = nodes.get(i);
@@ -747,8 +808,8 @@ public class DependencyManager {
         System.out.print("请输入编号 (1-" + nodes.size() + "): ");
         System.out.flush();
 
-        // 使用带超时的输入读取
-        String input = readLineWithTimeout(scanner, 5000);
+        // 使用带超时的输入读取（10秒）
+        String input = readLineWithTimeout(scanner, 10000);
 
         if (input != null) {
             try {
@@ -759,12 +820,16 @@ public class DependencyManager {
                 }
             } catch (NumberFormatException ignored) {
             }
-            System.out.println("输入无效，默认选择: " + nodes.get(0).description);
+            System.out.println("输入无效，自动选择...");
         } else {
-            System.out.println("\n等待超时，自动选择: " + nodes.get(0).description);
+            System.out.println("\n等待超时，自动选择...");
         }
 
-        return nodes.get(0);
+        // 超时或输入无效 → 加权随机选择
+        NodeInfo auto = autoSelectNode(nodes);
+        System.out.println("已自动选择节点: " + auto.url);
+        System.out.println("  " + auto.description);
+        return auto;
     }
 
     /**

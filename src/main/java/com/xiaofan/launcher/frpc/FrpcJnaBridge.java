@@ -181,10 +181,10 @@ public class FrpcJnaBridge {
         }
 
         try {
-            int result = jna.FrpcStartWithId(0, configPath);
-            if (result == 0) {
-                LOG.info("frpc 多实例启动成功");
-                return 0;
+            int instanceId = jna.FrpcStartWithId(0, configPath);
+            if (instanceId >= 0) {
+                LOG.info("frpc 多实例启动成功, instanceId=" + instanceId);
+                return instanceId;
             } else {
                 String error = jna.FrpcGetLastError();
                 LOG.severe("frpc 多实例启动失败: " + (error != null ? error : "未知错误"));
