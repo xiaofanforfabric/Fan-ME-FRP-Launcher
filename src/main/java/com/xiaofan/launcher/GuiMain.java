@@ -61,7 +61,7 @@ public class GuiMain {
             // ====== 第〇步：先初始化 frpc 依赖（下载动态库/二进制），再搞其他 ======
             System.out.println("正在初始化 frpc 运行环境...");
             FrpcManager frpcManager = FrpcManager.getInstance();
-            if (!frpcManager.init()) {
+            if (!frpcManager.init(true)) {
                 System.err.println("错误: frpc 依赖初始化失败，功能可能受限");
                 // 不退出，让用户至少能看界面
             } else {

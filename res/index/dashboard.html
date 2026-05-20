@@ -1518,6 +1518,7 @@ select.form-input { cursor: pointer; }
             const data = await resp.json();
             if (data.code === 200) {
                 showToast('✅ 启动成功: ' + proxyName, 'success');
+                loadProxyList(); // 刷新隧道状态
             } else {
                 showToast('❌ ' + (data.message || '启动失败'), 'error');
             }
@@ -1540,6 +1541,7 @@ select.form-input { cursor: pointer; }
             const data = await resp.json();
             if (data.code === 200) {
                 showToast('✅ 已关闭: ' + proxyName, 'success');
+                loadProxyList(); // 刷新隧道状态
             } else {
                 showToast('❌ ' + (data.message || '关闭失败'), 'error');
             }

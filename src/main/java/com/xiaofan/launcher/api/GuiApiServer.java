@@ -1109,7 +1109,15 @@ public class GuiApiServer {
 
     /**
      * 处理 POST /api/stopproxy - 关闭隧道
-     * 停止指定 proxyId 的 frpc 实例
+     * 停止指定 proxyId 的 frpc 实例，并通过 ME Frp API 确保服务端感知到隧道关闭
+     * 
+     * 流程：
+     *   1. 本地关闭 frpc
+     *   2. 调用 ME Frp API 禁用隧道（确保服务端标记隧道离线）
+     *   3. 调用 ME Frp API 强制下线（确保服务端断开连接）
+     *   4. 调用 ME Frp API 启用隧道（恢复隧道可用状态）
+     *   各操作间隔 100ms
+     * 
      * Body: {"proxyId": 123}
      */
     private String handleStopProxy(String body) {
@@ -1120,22 +1128,117 @@ public class GuiApiServer {
                 return "{\"code\":400,\"message\":\"缺少 proxyId 参数\"}";
             }
 
+            // 从 config.json 读取 accesstoken
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            String accesstoken = null;
+            if (Files.exists(configFile)) {
+                String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+                String encoded = extractJsonString(content, "accesstoken");
+                if (encoded != null && !encoded.isEmpty()) {
+                    accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+                }
+            }
+
             FrpcManager frpcManager = FrpcManager.getInstance();
-            if (!frpcManager.isProxyRunning(proxyId)) {
-                LOG.info("[handleStopProxy] proxyId=" + proxyId + " 未在运行");
-                return "{\"code\":200,\"message\":\"该隧道未在运行\"}";
+
+            // 步骤1: 本地关闭 frpc
+            LOG.info("[handleStopProxy] 步骤1: 本地关闭 frpc, proxyId=" + proxyId);
+            frpcManager.stopProxy(proxyId);
+            // 等待 frpc 完全退出
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
             }
-            boolean ok = frpcManager.stopProxy(proxyId);
-            if (ok) {
-                LOG.info("[handleStopProxy] proxyId=" + proxyId + " 已停止");
+            LOG.info("[handleStopProxy] frpc 本地已停止, proxyId=" + proxyId);
+
+            if (accesstoken == null) {
+                LOG.warning("[handleStopProxy] 未找到 accesstoken，跳过 API 操作");
                 return "{\"code\":200,\"message\":\"已停止\"}";
-            } else {
-                LOG.severe("[handleStopProxy] proxyId=" + proxyId + " 停止失败");
-                return "{\"code\":500,\"message\":\"frpc 停止失败\"}";
             }
+
+            // 步骤2: 禁用隧道（isDisabled: true）
+            try {
+                Thread.sleep(100);
+                LOG.info("[handleStopProxy] 步骤2: 调用 ME Frp API 禁用隧道, proxyId=" + proxyId);
+                String toggleBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":true}";
+                String toggleResp = callMeFrpApi("/auth/proxy/toggle", toggleBody, accesstoken);
+                LOG.info("[handleStopProxy] 禁用隧道响应: " + toggleResp);
+            } catch (Exception e) {
+                LOG.warning("[handleStopProxy] 禁用隧道失败: " + e.getMessage());
+            }
+
+            // 步骤3: 强制下线
+            try {
+                Thread.sleep(100);
+                LOG.info("[handleStopProxy] 步骤3: 调用 ME Frp API 强制下线, proxyId=" + proxyId);
+                String kickBody = "{\"proxyId\":" + proxyId + "}";
+                String kickResp = callMeFrpApi("/auth/proxy/kick", kickBody, accesstoken);
+                LOG.info("[handleStopProxy] 强制下线响应: " + kickResp);
+            } catch (Exception e) {
+                LOG.warning("[handleStopProxy] 强制下线失败: " + e.getMessage());
+            }
+
+            // 步骤4: 启用隧道（恢复可用状态）
+            try {
+                Thread.sleep(100);
+                LOG.info("[handleStopProxy] 步骤4: 调用 ME Frp API 启用隧道, proxyId=" + proxyId);
+                String enableBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":false}";
+                String enableResp = callMeFrpApi("/auth/proxy/toggle", enableBody, accesstoken);
+                LOG.info("[handleStopProxy] 启用隧道响应: " + enableResp);
+            } catch (Exception e) {
+                LOG.warning("[handleStopProxy] 启用隧道失败: " + e.getMessage());
+            }
+
+            LOG.info("[handleStopProxy] proxyId=" + proxyId + " 关闭流程完成");
+            return "{\"code\":200,\"message\":\"已停止\"}";
+
         } catch (Exception e) {
             LOG.severe("[handleStopProxy] 停止隧道异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"停止隧道失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * 调用 ME Frp API
+     * @param apiPath API 路径，例如 /auth/proxy/toggle
+     * @param body 请求体 JSON
+     * @param accesstoken 用户访问令牌
+     * @return API 响应字符串
+     */
+    private String callMeFrpApi(String apiPath, String body, String accesstoken) {
+        try {
+            String apiUrl = ME_FRP_API + apiPath;
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(5000);
+            conn.setReadTimeout(5000);
+
+            byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
+            conn.getOutputStream().write(bodyBytes);
+
+            int responseCode = conn.getResponseCode();
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(
+                            responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                            StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+            return apiResponse.toString();
+        } catch (Exception e) {
+            LOG.warning("[callMeFrpApi] " + apiPath + " 请求失败: " + e.getMessage());
+            return "{\"code\":-1,\"message\":\"" + e.getMessage() + "\"}";
         }
     }
 
