@@ -205,6 +205,9 @@ public class GuiApiServer {
             } else if ("GET".equalsIgnoreCase(method) && "/api/server_info".equals(path)) {
                 String response = handleServerInfo();
                 sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/api/server_important_info".equals(path)) {
+                String response = handleServerImportantInfo();
+                sendJsonResponse(out, 200, response);
 
             } else {
 
@@ -1416,6 +1419,110 @@ public class GuiApiServer {
             LOG.severe("[handleServerInfo] 获取公告异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"获取公告失败: " + e.getMessage() + "\"}";
         }
+    }
+
+    /**
+     * 处理 GET /api/server_important_info - 获取重要公告（弹窗）
+     * 调用 ME Frp API /auth/popupNotice
+     * 将结果保存到 res/server_info.json，对比内容是否有变化
+     * 返回: {"code":200,"data":"公告内容","changed":true/false,"message":"获取弹窗公告成功"}
+     */
+    private String handleServerImportantInfo() {
+        try {
+            // 从 config.json 读取 accesstoken
+            String accesstoken = null;
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (Files.exists(configFile)) {
+                String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+                String encoded = extractJsonString(content, "accesstoken");
+                if (encoded != null && !encoded.isEmpty()) {
+                    accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+                }
+            }
+
+            String apiUrl = ME_FRP_API + "/auth/popupNotice";
+            LOG.info("[handleServerImportantInfo] >>> 请求上游: GET " + apiUrl);
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            if (accesstoken != null && !accesstoken.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+                LOG.info("[handleServerImportantInfo] 已携带 Authorization 头");
+            } else {
+                LOG.warning("[handleServerImportantInfo] 未找到 accesstoken，请求将不带 Authorization 头");
+            }
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleServerImportantInfo] <<< 上游返回: HTTP " + responseCode);
+            if (responseCode != 200) {
+                conn.disconnect();
+                return "{\"code\":500,\"message\":\"获取重要公告失败\"}";
+            }
+
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleServerImportantInfo] <<< 上游响应体: " + respStr);
+
+            // 从上游响应中提取 data 字段（公告内容）
+            String upstreamData = extractJsonString(respStr, "data");
+            if (upstreamData == null) {
+                return "{\"code\":500,\"message\":\"上游返回数据格式异常\"}";
+            }
+
+            // 保存到 res/server_info.json
+            Path serverInfoFile = resDir.resolve("server_info.json");
+            boolean changed = true;
+            if (Files.exists(serverInfoFile)) {
+                String oldContent = new String(Files.readAllBytes(serverInfoFile), StandardCharsets.UTF_8);
+                // 对比内容是否有变化
+                if (oldContent.equals(upstreamData)) {
+                    changed = false;
+                }
+            }
+
+            // 写入新内容
+            Files.write(serverInfoFile, upstreamData.getBytes(StandardCharsets.UTF_8));
+            LOG.info("[handleServerImportantInfo] 已保存到: " + serverInfoFile.toAbsolutePath() + ", changed=" + changed);
+
+            // 返回给前端
+            return "{\"code\":200,\"data\":\"" + escapeJsonString(upstreamData) + "\",\"changed\":" + changed + ",\"message\":\"获取弹窗公告成功\"}";
+
+        } catch (Exception e) {
+            LOG.severe("[handleServerImportantInfo] 获取重要公告异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"错误，请查看日志并联系开发者获得支持\"}";
+        }
+    }
+
+    /**
+     * 转义 JSON 字符串中的特殊字符
+     */
+    private String escapeJsonString(String s) {
+        if (s == null || s.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:   sb.append(c);     break;
+            }
+        }
+        return sb.toString();
     }
 
     /**
