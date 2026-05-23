@@ -196,6 +196,9 @@ public class GuiApiServer {
             } else if ("GET".equalsIgnoreCase(method) && "/api/getserverstatus".equals(path)) {
                 String response = handleGetServerStatus();
                 sendJsonResponse(out, 200, response);
+            } else if ("POST".equalsIgnoreCase(method) && "/api/logout".equals(path)) {
+                String response = handleLogout();
+                sendJsonResponse(out, 200, response);
 
             } else {
 
@@ -1265,6 +1268,26 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handleGetServerStatus] 获取本地状态异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"获取本地状态失败\"}";
+        }
+    }
+
+    /**
+     * 处理 POST /api/logout - 退出登录
+     * 直接删除 config.json 文件
+     */
+    private String handleLogout() {
+        try {
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (Files.exists(configFile)) {
+                Files.delete(configFile);
+                LOG.info("[handleLogout] config.json 已删除");
+                return "{\"code\":200,\"message\":\"已退出登录\"}";
+            } else {
+                return "{\"code\":200,\"message\":\"未登录\"}";
+            }
+        } catch (Exception e) {
+            LOG.severe("[handleLogout] 删除 config.json 失败: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"退出登录失败: " + e.getMessage() + "\"}";
         }
     }
 

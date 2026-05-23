@@ -73,10 +73,19 @@ application {
     ]
 }
 
+// 从 res/v.txt 读取版本号
+def loadVersion() {
+    def vFile = file('res/v.txt')
+    if (vFile.exists()) {
+        return vFile.text.trim()
+    }
+    return '0.0.0_dev'
+}
+
 shadowJar {
     archiveBaseName.set('Fan-ME-FRP-Launcher')
     archiveClassifier.set('')
-    archiveVersion.set('1.0')
+    archiveVersion.set(loadVersion())
     mergeServiceFiles()
     manifest {
         attributes(
