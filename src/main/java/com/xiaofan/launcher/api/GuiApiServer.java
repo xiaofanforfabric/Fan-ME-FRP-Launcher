@@ -202,6 +202,9 @@ public class GuiApiServer {
             } else if ("GET".equalsIgnoreCase(method) && "/api/serverstatus".equals(path)) {
                 String response = handleServerStatus();
                 sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/api/server_info".equals(path)) {
+                String response = handleServerInfo();
+                sendJsonResponse(out, 200, response);
 
             } else {
 
@@ -1352,6 +1355,66 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handleServerStatus] 获取系统状态异常: " + e.getMessage());
             return "{\"code\":500,\"data\":{\"status\":2,\"remark\":\"请求失败: " + e.getMessage() + "\"},\"message\":\"获取系统状态失败\"}";
+        }
+    }
+
+    /**
+     * 处理 GET /api/server_info - 获取 ME Frp 公告
+     * 调用 ME Frp API /auth/notice
+     * 从 config.json 读取 accesstoken 并携带 Authorization 头
+     */
+    private String handleServerInfo() {
+        try {
+            // 从 config.json 读取 accesstoken
+            String accesstoken = null;
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (Files.exists(configFile)) {
+                String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+                String encoded = extractJsonString(content, "accesstoken");
+                if (encoded != null && !encoded.isEmpty()) {
+                    accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+                }
+            }
+
+            String apiUrl = ME_FRP_API + "/auth/notice";
+            LOG.info("[handleServerInfo] >>> 请求上游: GET " + apiUrl);
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            if (accesstoken != null && !accesstoken.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+                LOG.info("[handleServerInfo] 已携带 Authorization 头");
+            } else {
+                LOG.warning("[handleServerInfo] 未找到 accesstoken，请求将不带 Authorization 头");
+            }
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleServerInfo] <<< 上游返回: HTTP " + responseCode);
+            if (responseCode != 200) {
+                conn.disconnect();
+                return "{\"code\":500,\"message\":\"获取公告失败\"}";
+            }
+
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleServerInfo] <<< 上游响应体: " + respStr);
+            return respStr;
+
+        } catch (Exception e) {
+            LOG.severe("[handleServerInfo] 获取公告异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"获取公告失败: " + e.getMessage() + "\"}";
         }
     }
 
