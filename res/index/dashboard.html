@@ -421,6 +421,11 @@ select.form-input { cursor: pointer; }
                             <div class="info-value" id="infoSigned">-</div>
                         </div>
                     </div>
+                    <!-- 公告区域 - 在用户信息下面 -->
+                    <div id="noticeArea" style="margin-top:20px;padding:16px 20px;border-radius:20px;background:rgba(255,149,0,0.08);border:1px solid rgba(255,149,0,0.2);display:none;">
+                        <div style="font-size:13px;font-weight:600;color:#ff9500;margin-bottom:8px;">📢 公告</div>
+                        <div id="noticeContent" style="font-size:14px;line-height:1.6;color:var(--text-main);white-space:pre-wrap;"></div>
+                    </div>
                 </div>
             </div>
 
@@ -818,6 +823,9 @@ select.form-input { cursor: pointer; }
             // 获取 ME Frp 系统运行状态
             fetchServerStatus();
 
+            // 获取公告
+            fetchNotice();
+
         } catch (err) {
             console.error('加载用户数据失败:', err);
             window.location.href = '/login.html';
@@ -873,7 +881,71 @@ select.form-input { cursor: pointer; }
         return mbps.toFixed(0) + ' Mbps';
     };
 
+    // 简单的 Markdown 转 HTML（公告内容已含 HTML 标签，保留它们）
+    function mdToHtml(md) {
+        let html = md
+            // 先转义所有 HTML 标签，防止 <a> <img> 等可交互标签
+            .replace(/</g, '<')
+            .replace(/>/g, '>')
+            // 还原白名单标签：<br/> <hr/> <strong> <h2> <h3> <li> <blockquote>
+            .replace(/<br\s*\/?>/gi, '<br/>')
+            .replace(/<hr\s*\/?>/gi, '<hr/>')
+            .replace(/<strong>/gi, '<strong>')
+            .replace(/<\/strong>/gi, '</strong>')
+            .replace(/<h2>/gi, '<h2>')
+            .replace(/<\/h2>/gi, '</h2>')
+            .replace(/<h3>/gi, '<h3>')
+            .replace(/<\/h3>/gi, '</h3>')
+            .replace(/<li>/gi, '<li>')
+            .replace(/<\/li>/gi, '</li>')
+            .replace(/<blockquote>/gi, '<blockquote>')
+            .replace(/<\/blockquote>/gi, '</blockquote>')
+            // 换行 \n -> <br/>
+            .replace(/\n/g, '<br/>')
+            // 加粗 **text**
+            .replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>')
+            // 分隔线 ___ 或 ---
+            .replace(/(?:<br\/>)?_{3,}(?:<br\/>)?/g, '<hr/>')
+            .replace(/(?:<br\/>)?-{3,}(?:<br\/>)?/g, '<hr/>')
+            // 标题 ### text / ## text
+            .replace(/### (.+?)(?:<br\/>|$)/g, '<h3 style="font-size:16px;font-weight:700;margin:12px 0 6px;">$1</h3>')
+            .replace(/## (.+?)(?:<br\/>|$)/g, '<h2 style="font-size:18px;font-weight:700;margin:14px 0 8px;">$1</h2>')
+            // 链接 [text](url) -> 直接显示原始文本，不渲染为超链接
+            .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '$1 ($2)')
+            // 列表项 - text
+            .replace(/^- (.+?)(?:<br\/>|$)/gm, '<li style="margin:2px 0 2px 16px;">$1</li>')
+            // 引用 > text
+            .replace(/^> (.+?)(?:<br\/>|$)/gm, '<blockquote style="border-left:3px solid var(--primary);padding:4px 12px;margin:8px 0;color:var(--text-sec);">$1</blockquote>')
+            // 清理多余的 <br/>
+            .replace(/(<\/(?:h[23]|li|blockquote)>|<hr\/>)\s*<br\/>/g, '$1')
+            .replace(/<br\/>\s*(<(?:h[23]|li|blockquote|hr))/g, '$1');
+        return html;
+    }
 
+    // 获取公告
+    async function fetchNotice() {
+        try {
+            const resp = await fetch('/api/server_info');
+            const data = await resp.json();
+            const area = document.getElementById('noticeArea');
+            const content = document.getElementById('noticeContent');
+            if (data.code === 200 && data.data) {
+                // data.data 是公告字符串（含 Markdown/HTML）
+                const noticeStr = data.data;
+                if (noticeStr && noticeStr.length > 0) {
+                    area.style.display = 'block';
+                    content.innerHTML = mdToHtml(noticeStr);
+                } else {
+                    area.style.display = 'none';
+                }
+            } else {
+                area.style.display = 'none';
+            }
+        } catch (e) {
+            const area = document.getElementById('noticeArea');
+            if (area) area.style.display = 'none';
+        }
+    }
 
     const formatBytes = (bytes) => {
         if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
