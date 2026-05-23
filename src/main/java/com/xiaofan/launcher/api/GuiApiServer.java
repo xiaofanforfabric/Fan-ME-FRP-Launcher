@@ -1501,7 +1501,7 @@ public class GuiApiServer {
 
         } catch (Exception e) {
             LOG.severe("[handleServerImportantInfo] 获取重要公告异常: " + e.getMessage());
-            return "{\"code\":500,\"message\":\"获取重要公告失败: " + e.getMessage() + "\"}";
+            return "{\"code\":500,\"message\":\"错误，请查看日志并联系开发者获得支持\"}";
         }
     }
 
