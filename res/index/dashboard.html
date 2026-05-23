@@ -375,6 +375,10 @@ select.form-input { cursor: pointer; }
                         <div class="profile-info">
                             <div class="profile-name" id="userName">加载中...</div>
                             <div class="profile-badge" id="userBadge">-</div>
+                            <div id="mefrpStatus" style="display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:600;padding:3px 10px;border-radius:20px;background:rgba(120,120,128,0.08);margin-top:8px;">
+                                <span id="mefrpDot" style="width:8px;height:8px;border-radius:50%;background:var(--text-sec);display:inline-block;"></span>
+                                <span id="mefrpText" style="color:var(--text-sec);">检查中...</span>
+                            </div>
                         </div>
                     </div>
                     <div class="profile-stats">
@@ -811,11 +815,58 @@ select.form-input { cursor: pointer; }
             // 设置
             document.getElementById('currentUser').textContent = u.username;
 
+            // 获取 ME Frp 系统运行状态
+            fetchServerStatus();
+
         } catch (err) {
             console.error('加载用户数据失败:', err);
             window.location.href = '/login.html';
         }
     };
+
+    // 获取 ME Frp 系统运行状态
+    async function fetchServerStatus() {
+        try {
+            const resp = await fetch('/api/serverstatus');
+            const data = await resp.json();
+            const dot = document.getElementById('mefrpDot');
+            const text = document.getElementById('mefrpText');
+            const statusEl = document.getElementById('mefrpStatus');
+            if (data.code === 200 && data.data) {
+                const status = data.data.status;
+                const remark = data.data.remark || '';
+                if (status === 0) {
+                    dot.style.background = '#34c759';
+                    text.textContent = 'ME Frp ' + remark;
+                    text.style.color = '#34c759';
+                    statusEl.style.background = 'rgba(52,199,89,0.12)';
+                } else if (status === 1) {
+                    dot.style.background = '#ff9500';
+                    text.textContent = 'ME Frp ' + remark;
+                    text.style.color = '#ff9500';
+                    statusEl.style.background = 'rgba(255,149,0,0.12)';
+                } else {
+                    dot.style.background = '#ff3b30';
+                    text.textContent = 'ME Frp ' + remark;
+                    text.style.color = '#ff3b30';
+                    statusEl.style.background = 'rgba(255,59,48,0.12)';
+                }
+            } else {
+                dot.style.background = 'var(--text-sec)';
+                text.textContent = '无法获取状态';
+                text.style.color = 'var(--text-sec)';
+                statusEl.style.background = 'rgba(120,120,128,0.08)';
+            }
+        } catch (e) {
+            const dot = document.getElementById('mefrpDot');
+            const text = document.getElementById('mefrpText');
+            const statusEl = document.getElementById('mefrpStatus');
+            dot.style.background = 'var(--text-sec)';
+            text.textContent = '检查失败';
+            text.style.color = 'var(--text-sec)';
+            statusEl.style.background = 'rgba(120,120,128,0.08)';
+        }
+    }
 
     const formatBandwidth = (kbps) => {
         const mbps = kbps / 128;

@@ -199,6 +199,9 @@ public class GuiApiServer {
             } else if ("POST".equalsIgnoreCase(method) && "/api/logout".equals(path)) {
                 String response = handleLogout();
                 sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/api/serverstatus".equals(path)) {
+                String response = handleServerStatus();
+                sendJsonResponse(out, 200, response);
 
             } else {
 
@@ -1288,6 +1291,67 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handleLogout] 删除 config.json 失败: " + e.getMessage());
             return "{\"code\":500,\"message\":\"退出登录失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * 处理 GET /api/serverstatus - 获取 ME Frp 系统运行状态
+     * 调用 ME Frp API /auth/system/status（无需 token）
+     * 返回: {"code":200,"data":{"status":0,"remark":"ME Frp 当前一切正常！"},"message":"获取系统状态成功"}
+     * status: 0=正常(绿), 1=降级(黄), 2=离线(红)
+     */
+    private String handleServerStatus() {
+        try {
+            // 从 config.json 读取 accesstoken
+            String accesstoken = null;
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (Files.exists(configFile)) {
+                String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+                String encoded = extractJsonString(content, "accesstoken");
+                if (encoded != null && !encoded.isEmpty()) {
+                    accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+                }
+            }
+
+            String apiUrl = ME_FRP_API + "/auth/system/status";
+            LOG.info("[handleServerStatus] >>> 请求上游: GET " + apiUrl);
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            if (accesstoken != null && !accesstoken.isEmpty()) {
+                conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+                LOG.info("[handleServerStatus] 已携带 Authorization 头");
+            } else {
+                LOG.warning("[handleServerStatus] 未找到 accesstoken，请求将不带 Authorization 头");
+            }
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleServerStatus] <<< 上游返回: HTTP " + responseCode);
+            if (responseCode != 200) {
+                conn.disconnect();
+                return "{\"code\":500,\"data\":{\"status\":2,\"remark\":\"无法连接 ME Frp 服务\"},\"message\":\"获取系统状态失败\"}";
+            }
+
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleServerStatus] <<< 上游响应体: " + respStr);
+            return respStr;
+
+        } catch (Exception e) {
+            LOG.severe("[handleServerStatus] 获取系统状态异常: " + e.getMessage());
+            return "{\"code\":500,\"data\":{\"status\":2,\"remark\":\"请求失败: " + e.getMessage() + "\"},\"message\":\"获取系统状态失败\"}";
         }
     }
 
