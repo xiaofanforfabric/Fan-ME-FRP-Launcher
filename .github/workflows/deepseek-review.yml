@@ -1,0 +1,20 @@
+name: DeepSeek AI Code Review
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: DeepSeek PR Review
+        uses: freeedcom/ai-code-review@main
+        with:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          OPENAI_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          openai_api_base: "https://api.deepseek.com"
+          model: "deepseek-chat"
+          review_comment_lgtm: true
