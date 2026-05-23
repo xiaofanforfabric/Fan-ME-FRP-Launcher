@@ -1,0 +1,668 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>更新日志管理 - Fan-ME-FRP</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body {
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI", sans-serif;
+    background: #0a0a0f;
+    color: #e8e8ed;
+    min-height: 100vh;
+    display: flex;
+    justify-content: center;
+    padding: 40px 20px;
+}
+.container { max-width: 900px; width: 100%; }
+h1 {
+    font-size: 28px;
+    font-weight: 700;
+    margin-bottom: 8px;
+    background: linear-gradient(135deg, #4a6fff, #6b8aff);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+.subtitle { color: #8a8a93; font-size: 14px; margin-bottom: 32px; }
+
+/* 卡片 */
+.card {
+    background: rgba(20, 20, 25, 0.6);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.06);
+    border-radius: 20px;
+    padding: 28px;
+    margin-bottom: 24px;
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.card-title {
+    font-size: 18px;
+    font-weight: 700;
+    margin-bottom: 20px;
+    color: #f0f0f5;
+}
+
+/* 表单 */
+.form-group { margin-bottom: 16px; }
+.form-group:last-child { margin-bottom: 0; }
+label {
+    display: block;
+    font-size: 13px;
+    font-weight: 600;
+    color: #8a8a93;
+    margin-bottom: 6px;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+input, textarea {
+    width: 100%;
+    background: rgba(120,120,128,0.08);
+    border: 1px solid rgba(255,255,255,0.08);
+    border-radius: 12px;
+    padding: 12px 16px;
+    font-size: 15px;
+    color: #e8e8ed;
+    outline: none;
+    transition: all 0.2s;
+    font-family: inherit;
+}
+input:focus, textarea:focus {
+    border-color: #4a6fff;
+    box-shadow: 0 0 0 3px rgba(74,111,255,0.15);
+}
+textarea {
+    resize: vertical;
+    min-height: 120px;
+    line-height: 1.6;
+}
+.form-hint {
+    font-size: 12px;
+    color: #6a6a73;
+    margin-top: 4px;
+}
+.form-row {
+    display: flex;
+    gap: 16px;
+}
+.form-row .form-group { flex: 1; }
+
+/* 按钮 */
+.btn {
+    padding: 12px 28px;
+    border-radius: 14px;
+    font-size: 15px;
+    font-weight: 600;
+    border: none;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+}
+.btn-primary {
+    background: #4a6fff;
+    color: #fff;
+}
+.btn-primary:hover { background: #6b8aff; transform: translateY(-1px); }
+.btn-danger {
+    background: rgba(255,59,48,0.15);
+    color: #ff3b30;
+}
+.btn-danger:hover { background: rgba(255,59,48,0.25); }
+.btn-secondary {
+    background: rgba(120,120,128,0.12);
+    color: #e8e8ed;
+}
+.btn-secondary:hover { background: rgba(120,120,128,0.2); }
+.btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none !important;
+}
+
+/* 版本列表 */
+.version-list { margin-top: 20px; }
+.version-item {
+    background: rgba(120,120,128,0.06);
+    border: 1px solid rgba(255,255,255,0.04);
+    border-radius: 16px;
+    padding: 20px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+.version-item:hover { border-color: rgba(74,111,255,0.2); }
+.version-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+.version-number {
+    font-size: 18px;
+    font-weight: 700;
+    color: #4a6fff;
+}
+.version-meta {
+    font-size: 13px;
+    color: #8a8a93;
+}
+.version-note {
+    font-size: 14px;
+    color: #a8a8b3;
+    margin-bottom: 8px;
+    padding: 8px 12px;
+    background: rgba(74,111,255,0.06);
+    border-radius: 8px;
+}
+.version-changes {
+    list-style: none;
+    padding: 0;
+}
+.version-changes li {
+    font-size: 14px;
+    color: #c8c8d0;
+    padding: 4px 0 4px 20px;
+    position: relative;
+    line-height: 1.5;
+}
+.version-changes li::before {
+    content: '•';
+    position: absolute;
+    left: 4px;
+    color: #4a6fff;
+}
+.version-actions {
+    display: flex;
+    gap: 8px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255,255,255,0.04);
+}
+.version-actions .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+/* Toast */
+.toast-container {
+    position: fixed;
+    top: 24px;
+    left: 50%;
+    transform: translateX(-50%);
+    z-index: 9999;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    pointer-events: none;
+}
+.toast {
+    background: rgba(20,20,25,0.9);
+    backdrop-filter: blur(20px);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 14px;
+    padding: 14px 24px;
+    font-size: 15px;
+    font-weight: 600;
+    color: #e8e8ed;
+    pointer-events: auto;
+    animation: toastIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+    box-shadow: 0 10px 40px rgba(0,0,0,0.5);
+}
+.toast.success { border-color: rgba(52,199,89,0.3); }
+.toast.error { border-color: rgba(255,59,48,0.3); }
+@keyframes toastIn {
+    0% { transform: translateY(-20px) scale(0.9); opacity: 0; }
+    100% { transform: translateY(0) scale(1); opacity: 1; }
+}
+@keyframes toastOut {
+    0% { transform: translateY(0) scale(1); opacity: 1; }
+    100% { transform: translateY(-20px) scale(0.9); opacity: 0; }
+}
+
+/* 确认弹窗 */
+.confirm-overlay {
+    position: fixed; top: 0; left: 0; width: 100vw; height: 100vh;
+    background: rgba(0,0,0,0.5); backdrop-filter: blur(8px);
+    z-index: 99998; display: flex; align-items: center; justify-content: center;
+}
+.confirm-card {
+    background: #0a0a0f; border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 24px; padding: 28px; width: 90%; max-width: 360px;
+    transform: scale(0.85) translateY(20px); opacity: 0;
+    transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.confirm-card.show { transform: scale(1) translateY(0); opacity: 1; }
+.confirm-title { font-size: 18px; font-weight: 700; margin-bottom: 12px; }
+.confirm-message { font-size: 14px; color: #8a8a93; margin-bottom: 24px; line-height: 1.5; }
+.confirm-actions { display: flex; gap: 12px; justify-content: flex-end; }
+.confirm-btn {
+    padding: 10px 20px; border-radius: 12px; font-size: 14px; font-weight: 600;
+    border: none; cursor: pointer; transition: all 0.2s;
+}
+.confirm-btn.cancel { background: rgba(120,120,128,0.12); color: #e8e8ed; }
+.confirm-btn.cancel:hover { background: rgba(120,120,128,0.2); }
+.confirm-btn.confirm { background: #4a6fff; color: #fff; }
+.confirm-btn.confirm:hover { background: #6b8aff; }
+.confirm-btn.danger { background: #ff3b30; color: #fff; }
+.confirm-btn.danger:hover { background: #ff4a3e; }
+
+.empty-state {
+    text-align: center;
+    padding: 40px 20px;
+    color: #6a6a73;
+    font-size: 15px;
+}
+.loading {
+    text-align: center;
+    padding: 20px;
+    color: #6a6a73;
+}
+
+/* app.json 版本号显示 */
+.app-version-display {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(74,111,255,0.08);
+    border: 1px solid rgba(74,111,255,0.15);
+    border-radius: 12px;
+    margin-bottom: 16px;
+}
+.app-version-label {
+    font-size: 13px;
+    font-weight: 600;
+    color: #8a8a93;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+}
+.app-version-value {
+    font-size: 20px;
+    font-weight: 700;
+    color: #4a6fff;
+}
+.app-version-hint {
+    font-size: 12px;
+    color: #6a6a73;
+    margin-left: auto;
+}
+
+@media (max-width: 600px) {
+    body { padding: 20px 12px; }
+    .card { padding: 20px; border-radius: 16px; }
+    .form-row { flex-direction: column; gap: 0; }
+    .version-header { flex-direction: column; align-items: flex-start; gap: 4px; }
+}
+</style>
+</head>
+<body>
+
+<div class="toast-container" id="toastContainer"></div>
+
+<div class="container">
+    <h1>📋 更新日志管理</h1>
+    <p class="subtitle">管理 Fan-ME-FRP-Launcher 的版本更新记录（tpca.json + app.json）</p>
+
+    <!-- app.json 当前版本 -->
+    <div class="card">
+        <div class="card-title">📌 app.json 版本管理</div>
+        <div class="app-version-display">
+            <span class="app-version-label">当前版本</span>
+            <span class="app-version-value" id="appVersionDisplay">-</span>
+            <span class="app-version-hint">此版本号用于客户端版本检测</span>
+        </div>
+        <div class="form-row">
+            <div class="form-group">
+                <label>设置版本号</label>
+                <input type="text" id="inputAppVersion" placeholder="例如: 1.0.0" />
+            </div>
+            <div class="form-group" style="display:flex;align-items:flex-end;">
+                <button class="btn btn-primary" id="btnSaveAppVersion" style="width:100%;">💾 保存 app.json</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 新建/编辑版本（tpca.json） -->
+    <div class="card" id="formCard">
+        <div class="card-title" id="formTitle">📝 新建发行版本（tpca.json）</div>
+
+        <div class="form-row">
+            <div class="form-group">
+                <label>发行版本号</label>
+                <input type="text" id="inputVersion" placeholder="例如: 1.0.0" />
+            </div>
+            <div class="form-group">
+                <label>发布日期</label>
+                <input type="date" id="inputDate" />
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>版本备注（可选）</label>
+            <input type="text" id="inputNote" placeholder="例如: 首个正式版本、紧急修复等" />
+        </div>
+
+        <div class="form-group">
+            <label>下载链接（可选）</label>
+            <input type="url" id="inputDownload" placeholder="例如: https://github.com/xxx/releases/download/v1.0.0/app.jar" />
+            <div class="form-hint">用户可通过此链接下载对应版本的安装包</div>
+        </div>
+
+        <div class="form-group">
+            <label>发行日志</label>
+            <textarea id="inputChanges" placeholder="每行一条更新内容&#10;例如:&#10;支持 GUI 图形界面模式&#10;支持命令行模式启动&#10;自动检测系统架构并下载对应平台 frpc"></textarea>
+            <div class="form-hint">每行一条更新内容</div>
+        </div>
+
+        <div style="display:flex;gap:12px;margin-top:8px;">
+            <button class="btn btn-primary" id="btnPublish">✅ 确认发行</button>
+            <button class="btn btn-secondary" id="btnClear" style="display:none;">取消编辑</button>
+        </div>
+    </div>
+
+    <!-- 版本列表（tpca.json） -->
+    <div class="card">
+        <div class="card-title">📦 已发行版本（tpca.json）</div>
+        <div id="versionListContainer">
+            <div class="loading">加载中...</div>
+        </div>
+    </div>
+</div>
+
+<script>
+// ====== Toast ======
+function showToast(message, type) {
+    type = type || 'info';
+    const container = document.getElementById('toastContainer');
+    const toast = document.createElement('div');
+    toast.className = 'toast ' + type;
+    const icons = { success: '✅', error: '❌', info: 'ℹ️' };
+    toast.textContent = (icons[type] || 'ℹ️') + ' ' + message;
+    container.appendChild(toast);
+    setTimeout(() => {
+        toast.style.animation = 'toastOut 0.3s ease forwards';
+        setTimeout(() => toast.remove(), 300);
+    }, 2500);
+}
+
+// ====== 确认弹窗 ======
+function showConfirm(title, message, dangerMode) {
+    return new Promise((resolve) => {
+        const overlay = document.createElement('div');
+        overlay.className = 'confirm-overlay';
+        overlay.innerHTML =
+            '<div class="confirm-card">' +
+                '<div class="confirm-title">' + title + '</div>' +
+                '<div class="confirm-message">' + message + '</div>' +
+                '<div class="confirm-actions">' +
+                    '<button class="confirm-btn cancel">取消</button>' +
+                    '<button class="confirm-btn ' + (dangerMode ? 'danger' : 'confirm') + '">确定</button>' +
+                '</div>' +
+            '</div>';
+        document.body.appendChild(overlay);
+        const card = overlay.querySelector('.confirm-card');
+        requestAnimationFrame(() => card.classList.add('show'));
+
+        overlay.querySelector('.cancel').addEventListener('click', () => {
+            overlay.remove(); resolve(false);
+        });
+        overlay.querySelector('.confirm-btn:last-child').addEventListener('click', () => {
+            overlay.remove(); resolve(true);
+        });
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) { overlay.remove(); resolve(false); }
+        });
+    });
+}
+
+// ====== 加载 app.json 版本号 ======
+async function loadAppVersion() {
+    try {
+        const resp = await fetch('/api/versions');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const versions = await resp.json();
+        if (versions && versions.length > 0) {
+            // 版本号已排序（从高到低）
+            const latest = versions[0].version;
+            document.getElementById('appVersionDisplay').textContent = 'v' + latest;
+            document.getElementById('inputAppVersion').value = latest;
+        } else {
+            document.getElementById('appVersionDisplay').textContent = '未设置';
+        }
+    } catch (e) {
+        document.getElementById('appVersionDisplay').textContent = '加载失败';
+        console.error(e);
+    }
+}
+
+// ====== 保存 app.json ======
+async function saveAppVersion() {
+    const version = document.getElementById('inputAppVersion').value.trim();
+    if (!version) {
+        showToast('请输入版本号', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnSaveAppVersion');
+    btn.disabled = true;
+    btn.textContent = '⏳ 保存中...';
+
+    try {
+        // 通过管理页面 API 保存 app.json（这里直接调用后端保存接口）
+        // 由于 API 服务是只读的，管理页面通过 AdminServer 的 API 来写文件
+        // 这里我们使用 fetch 到管理页面自身的保存接口
+        const resp = await fetch('/api/save-app', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version: version })
+        });
+        const data = await resp.json();
+        if (data.code === 200) {
+            showToast('✅ app.json 已更新为 v' + version, 'success');
+            document.getElementById('appVersionDisplay').textContent = 'v' + version;
+        } else {
+            showToast('❌ ' + (data.message || '保存失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 请求失败: ' + e.message, 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = '💾 保存 app.json';
+}
+
+// ====== 加载版本列表（tpca.json） ======
+async function loadVersions() {
+    const container = document.getElementById('versionListContainer');
+    container.innerHTML = '<div class="loading">加载中...</div>';
+
+    try {
+        const resp = await fetch('/api/versions');
+        if (!resp.ok) throw new Error('HTTP ' + resp.status);
+        const versions = await resp.json();
+
+        if (!versions || versions.length === 0) {
+            container.innerHTML = '<div class="empty-state">暂无发行版本，请在上方新建</div>';
+            return;
+        }
+
+        let html = '<div class="version-list">';
+        versions.forEach((v, index) => {
+            const isLatest = index === 0;
+            const changes = v.changes || [];
+            const dateStr = v.date || '日期未设置';
+            const noteStr = v.note || '';
+
+            html += '<div class="version-item">' +
+                '<div class="version-header">' +
+                    '<div class="version-number">' +
+                        (isLatest ? '⭐ ' : '') +
+                        'v' + escapeHtml(v.version) +
+                        (isLatest ? ' <span style="font-size:12px;color:#34c759;font-weight:600;">最新版本</span>' : '') +
+                    '</div>' +
+                    '<div class="version-meta">' + escapeHtml(dateStr) + '</div>' +
+                '</div>';
+
+            if (noteStr) {
+                html += '<div class="version-note">' + escapeHtml(noteStr) + '</div>';
+            }
+
+            if (changes.length > 0) {
+                html += '<ul class="version-changes">';
+                changes.forEach(c => {
+                    html += '<li>' + escapeHtml(c) + '</li>';
+                });
+                html += '</ul>';
+            }
+
+            html += '<div class="version-actions">' +
+                '<button class="btn btn-secondary" onclick="editVersion(\'' + escapeHtml(v.version) + '\')">✏️ 编辑</button>' +
+                (v.download ? '<a class="btn btn-primary" href="' + escapeHtml(v.download) + '" target="_blank" style="text-decoration:none;">⬇️ 下载</a>' : '') +
+                '<button class="btn btn-danger" onclick="deleteVersion(\'' + escapeHtml(v.version) + '\')">🗑️ 删除此发行版</button>' +
+                '</div>' +
+                '</div>';
+        });
+        html += '</div>';
+        container.innerHTML = html;
+
+    } catch (e) {
+        container.innerHTML = '<div class="empty-state">❌ 加载失败: ' + escapeHtml(e.message) + '<br><br><button class="btn btn-secondary" onclick="loadVersions()">🔄 重试</button></div>';
+    }
+}
+
+function escapeHtml(str) {
+    if (!str) return '';
+    return String(str).replace(/&/g,'&').replace(/</g,'<').replace(/>/g,'>').replace(/"/g,'"');
+}
+
+// ====== 编辑版本 ======
+function editVersion(version) {
+    fetch('/api/versions')
+        .then(r => r.json())
+        .then(versions => {
+            const v = versions.find(x => x.version === version);
+            if (!v) {
+                showToast('未找到版本数据', 'error');
+                return;
+            }
+
+            document.getElementById('inputVersion').value = v.version;
+            document.getElementById('inputDate').value = v.date || '';
+            document.getElementById('inputNote').value = v.note || '';
+            document.getElementById('inputDownload').value = v.download || '';
+            document.getElementById('inputChanges').value = (v.changes || []).join('\n');
+
+            document.getElementById('formTitle').textContent = '✏️ 编辑版本 v' + v.version;
+            document.getElementById('btnPublish').textContent = '💾 保存修改';
+            document.getElementById('btnClear').style.display = 'inline-flex';
+
+            document.getElementById('formCard').scrollIntoView({ behavior: 'smooth' });
+        })
+        .catch(e => showToast('获取版本数据失败: ' + e.message, 'error'));
+}
+
+// ====== 清空表单 ======
+function clearForm() {
+    document.getElementById('inputVersion').value = '';
+    document.getElementById('inputDate').value = '';
+    document.getElementById('inputNote').value = '';
+    document.getElementById('inputDownload').value = '';
+    document.getElementById('inputChanges').value = '';
+    document.getElementById('formTitle').textContent = '📝 新建发行版本（tpca.json）';
+    document.getElementById('btnPublish').textContent = '✅ 确认发行';
+    document.getElementById('btnClear').style.display = 'none';
+}
+
+// ====== 发布/保存版本 ======
+async function publishVersion() {
+    const version = document.getElementById('inputVersion').value.trim();
+    const date = document.getElementById('inputDate').value;
+    const note = document.getElementById('inputNote').value.trim();
+    const download = document.getElementById('inputDownload').value.trim();
+    const changes = document.getElementById('inputChanges').value.trim();
+
+    if (!version) {
+        showToast('请输入发行版本号', 'error');
+        return;
+    }
+    if (!changes) {
+        showToast('请输入发行日志', 'error');
+        return;
+    }
+
+    const btn = document.getElementById('btnPublish');
+    btn.disabled = true;
+    btn.textContent = '⏳ 处理中...';
+
+    try {
+        const resp = await fetch('/api/save-tpca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                version: version,
+                date: date,
+                note: note,
+                download: download,
+                changes: changes
+            })
+        });
+        const data = await resp.json();
+
+        if (data.code === 200) {
+            showToast('✅ 版本 ' + version + ' 保存成功！', 'success');
+            clearForm();
+            loadVersions();
+            loadAppVersion();
+        } else {
+            showToast('❌ ' + (data.message || '保存失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 请求失败: ' + e.message, 'error');
+    }
+
+    btn.disabled = false;
+    btn.textContent = document.getElementById('formTitle').textContent.includes('编辑') ? '💾 保存修改' : '✅ 确认发行';
+}
+
+// ====== 删除版本 ======
+async function deleteVersion(version) {
+    const ok = await showConfirm(
+        '删除发行版',
+        '确定要删除 v' + version + ' 吗？此操作不可恢复！',
+        true
+    );
+    if (!ok) return;
+
+    try {
+        const resp = await fetch('/api/delete-tpca', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ version: version })
+        });
+        const data = await resp.json();
+
+        if (data.code === 200) {
+            showToast('🗑️ 已删除 v' + version, 'success');
+            loadVersions();
+            loadAppVersion();
+        } else {
+            showToast('❌ ' + (data.message || '删除失败'), 'error');
+        }
+    } catch (e) {
+        showToast('❌ 请求失败: ' + e.message, 'error');
+    }
+}
+
+// ====== 事件绑定 ======
+document.getElementById('btnPublish').addEventListener('click', publishVersion);
+document.getElementById('btnClear').addEventListener('click', clearForm);
+document.getElementById('btnSaveAppVersion').addEventListener('click', saveAppVersion);
+
+// ====== 初始化 ======
+loadVersions();
+loadAppVersion();
+</script>
+</body>
+</html>

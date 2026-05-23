@@ -1,0 +1,43 @@
+plugins {
+    id 'java'
+    id 'application'
+    id 'com.github.johnrengelman.shadow' version '8.1.1'
+}
+
+group = 'com.xiaofan'
+version = '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // 轻量级 HTTP 服务器 - NanoHTTPD（纯 Java，零外部依赖）
+    implementation 'org.nanohttpd:nanohttpd:2.3.1'
+
+    // JSON 处理
+    implementation 'com.google.code.gson:gson:2.10.1'
+
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+}
+
+application {
+    mainClass = 'com.xiaofan.appservices.AppServicesMain'
+}
+
+shadowJar {
+    archiveBaseName.set('app_services')
+    archiveClassifier.set('')
+    archiveVersion.set('1.0')
+    mergeServiceFiles()
+    manifest {
+        attributes(
+            'Main-Class': 'com.xiaofan.appservices.AppServicesMain'
+        )
+    }
+}
+
+test {
+    useJUnitPlatform()
+}

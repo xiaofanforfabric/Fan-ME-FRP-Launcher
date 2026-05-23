@@ -81,3 +81,16 @@ implementation/ME-Frp-v5-GolangSdk/
 implementation/frp
 
 
+# IDE 配置
+.idea/
+
+# 本地服务敏感数据
+app_services/src/main/resources/ssl/
+app_services/src/main/resources/cloudflared-*
+*.pem
+*.key
+*.crt
+
+# 运行时生成的数据
+tpca.json
+app.json

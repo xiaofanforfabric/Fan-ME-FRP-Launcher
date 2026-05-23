@@ -12,7 +12,7 @@ linux_arm.so:388c8fa36c3b9d6216729ddf4ed96ab3
 linux_arm64.h:cd7a9d3aaba032a0c76ca95f412bf48b
 linux_arm64.so:dd5779c9a5d1f7dce354bd9ae94a44ca
 md5.txt:48a929fa2fe0b80e8fb0102693dfcf63
-v.txt:424362be6727d334e57d99377331383f
+v.txt:5cf744018eb3c0a894dfd63a82c71ea1
 windows_arm64.dll:20c53e6d324e3abb83166086d7449708
 windows_arm64.h:cd7a9d3aaba032a0c76ca95f412bf48b
 windows_x64.dll:1bbc2bb780718c7ee8ff966b956ba3ae

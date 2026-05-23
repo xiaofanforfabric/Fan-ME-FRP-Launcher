@@ -2,9 +2,11 @@ package com.xiaofan.launcher;
 
 import java.io.File;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 
 import com.xiaofan.launcher.frpc.EasyStartup;
 import com.xiaofan.launcher.frpc.FrpcManager;
+import com.xiaofan.launcher.frpc.JarUpdater;
 
 /**
  * Fan-ME-FRP-Launcher 主入口
@@ -27,6 +29,16 @@ import com.xiaofan.launcher.frpc.FrpcManager;
 public class Main {
 
     public static void main(String[] args) {
+        // ====== 第〇步：检查 JAR 自身版本更新 ======
+        String jarDir = getJarDir();
+        Path resDir = Paths.get(jarDir, "res");
+        boolean updated = JarUpdater.checkAndUpdate(jarDir, resDir);
+        if (updated) {
+            // 已下载新版本并删除旧文件，退出
+            System.out.println("JAR 已更新，请重新启动新版本");
+            System.exit(0);
+        }
+
         // 检查命令行参数
         if (args.length > 0) {
             String configPath = null;
@@ -84,6 +96,27 @@ public class Main {
             System.err.println("启动 GUI 失败: " + e.getMessage());
             System.exit(1);
         }
+    }
+
+    /**
+     * 获取 JAR 所在目录
+     */
+    private static String getJarDir() {
+        try {
+            String path = Main.class
+                .getProtectionDomain()
+                .getCodeSource()
+                .getLocation()
+                .toURI()
+                .getPath();
+            File jarFile = new File(path);
+            if (jarFile.isFile()) {
+                return jarFile.getParentFile().getAbsolutePath();
+            }
+        } catch (Exception e) {
+            // ignore
+        }
+        return ".";
     }
 
     /**
