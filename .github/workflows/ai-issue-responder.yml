@@ -2,6 +2,8 @@ name: AI Issue 自动回复
 on:
   issues:
     types: [opened, edited]
+  issue_comment:
+    types: [created, edited]
 
 jobs:
   reply:
@@ -15,9 +17,16 @@ jobs:
           script: |
             const { owner, repo } = context.repo;
             const issueNumber = context.issue.number;
-            const title = context.payload.issue.title || "无标题";
-            const body = context.payload.issue.body || "无内容";
+            let userContent = "";
 
+            // 判断是 Issue 还是评论
+            if (context.payload.comment) {
+              userContent = context.payload.comment.body;
+            } else {
+              userContent = context.payload.issue.body || "无内容";
+            }
+
+            // 调用 AI
             const res = await fetch("https://api.deepseek.com/chat/completions", {
               method: "POST",
               headers: {
@@ -29,7 +38,7 @@ jobs:
                 temperature: 0.4,
                 messages: [{
                   role: "user",
-                  content: "用户提交了一个Issue，请给出友好、简洁、有用的回复。\n标题：" + title + "\n内容：" + body
+                  content: "请回答用户的问题：\n" + userContent
                 }]
               })
             });
@@ -39,7 +48,9 @@ jobs:
             const footer = "\n\n---\n以下为AI意见，不代表项目维护者意见，已通知项目维护者，请耐心等待回复";
 
             await github.rest.issues.createComment({
-              owner, repo, issue_number: issueNumber,
+              owner,
+              repo,
+              issue_number: issueNumber,
               body: "🤖 AI 自动回复：\n\n" + aiResponse + footer
             });
         env:
