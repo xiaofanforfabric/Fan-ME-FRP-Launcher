@@ -46,7 +46,8 @@ public class GuiApiServer {
 
     private static final Logger LOG = Logger.getLogger(GuiApiServer.class.getName());
     private static final String BIND_HOST = "127.0.0.1";
-    private static final int BIND_PORT = 1023;
+    private static final int BIND_PORT = 1025;
+
     private static final int THREAD_POOL_SIZE = 4;
     private static final String ME_FRP_API = "https://api.mefrp.com/api";
     private static final String CONFIG_FILE_NAME = "config.json";

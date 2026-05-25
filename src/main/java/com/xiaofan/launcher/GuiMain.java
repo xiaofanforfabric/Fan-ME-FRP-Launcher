@@ -90,7 +90,7 @@ public class GuiMain {
                         "Fan-ME-FRP-Launcher/1.0"
                     );
 
-                    webView.getEngine().load("http://127.0.0.1:1023/login.html");
+                    webView.getEngine().load("http://127.0.0.1:1025/login.html");
 
                     Scene scene = new Scene(webView, 1200, 800);
 

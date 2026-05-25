@@ -247,7 +247,7 @@ public class Main {
         apiServer.start();
 
         System.out.println();
-        System.out.println("HTTP API 服务已启动: http://127.0.0.1:1023");
+        System.out.println("HTTP API 服务已启动: http://127.0.0.1:1025");
         System.out.println("按 Ctrl+C 停止服务");
         System.out.println();
 
