@@ -155,6 +155,76 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
 .submit-btn { width: 100%; padding: 18px; border-radius: 16px; border: none; background: var(--primary); color: #fff; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; display: flex; align-items: center; justify-content: center; }
 .submit-btn:hover { background: var(--primary-hover); transform: translateY(-2px); box-shadow: 0 8px 20px var(--primary-light); }
 
+/* Tab 切换栏 */
+.tab-bar {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 32px;
+    background: rgba(120, 120, 128, 0.08);
+    border-radius: 16px;
+    padding: 4px;
+}
+.tab-btn {
+    flex: 1;
+    padding: 12px 16px;
+    border: none;
+    border-radius: 12px;
+    background: transparent;
+    color: var(--text-sec);
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+}
+.tab-btn.active {
+    background: var(--primary);
+    color: #fff;
+    box-shadow: 0 4px 12px var(--primary-light);
+}
+.tab-btn:hover:not(.active) {
+    background: var(--primary-light);
+    color: var(--primary);
+}
+
+/* 登录表单切换 */
+.login-form {
+    display: none;
+}
+.login-form.active {
+    display: block;
+}
+
+/* 人机验证码输入框 */
+.captcha-wrapper {
+    position: relative;
+}
+.captcha-wrapper .input-field {
+    padding-right: 110px;
+}
+.captcha-btn {
+    position: absolute;
+    right: 6px;
+    top: 50%;
+    transform: translateY(-50%);
+    padding: 8px 14px;
+    border: none;
+    border-radius: 10px;
+    background: var(--primary);
+    color: #fff;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    white-space: nowrap;
+}
+.captcha-btn:hover {
+    background: var(--primary-hover);
+}
+.captcha-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
 .msg-box { margin-top: 24px; text-align: center; font-size: 14px; font-weight: 600; height: 20px; opacity: 0; transition: opacity 0.3s; }
 .msg-box.show { opacity: 1; }
 .msg-success { color: var(--primary); }
@@ -242,10 +312,17 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
         <div class="card" id="mainCard">
             <div class="card-header">
                 <div class="card-title">连接网络</div>
-                <div class="card-subtitle">请前往官网控制面板复制访问密钥</div>
-
+                <div class="card-subtitle">选择登录方式</div>
             </div>
-            <form id="form">
+
+            <!-- 登录方式切换标签 -->
+            <div class="tab-bar">
+                <button class="tab-btn active" data-tab="token">密钥登录</button>
+                <button class="tab-btn" data-tab="password">密码登录</button>
+            </div>
+
+            <!-- 密钥登录表单 -->
+            <form id="form" class="login-form active" data-form="token">
                 <div class="input-wrapper">
                     <input type="text" class="input-field" id="token" required autocomplete="off" placeholder="Accesstoken (runId_proxyId)">
                 </div>
@@ -253,6 +330,24 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
                     <span class="btn-text">立即启动</span>
                 </button>
             </form>
+
+            <!-- 密码登录表单 -->
+            <form id="passForm" class="login-form" data-form="password">
+                <div class="input-wrapper">
+                    <input type="text" class="input-field" id="passUsername" required autocomplete="username" placeholder="用户名">
+                </div>
+                <div class="input-wrapper">
+                    <input type="password" class="input-field" id="passPassword" required autocomplete="current-password" placeholder="密码">
+                </div>
+                <div class="input-wrapper captcha-wrapper">
+                    <input type="text" class="input-field" id="passCaptcha" required autocomplete="off" placeholder="人机验证码">
+                    <button type="button" class="captcha-btn" id="captchaBtn">获取验证码</button>
+                </div>
+                <button type="submit" class="submit-btn" id="passSubmitBtn">
+                    <span class="btn-text">密码登录</span>
+                </button>
+            </form>
+
             <div class="msg-box" id="msgBox"></div>
         </div>
     </main>
@@ -496,6 +591,115 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
         }
     };
     tryAutoLogin();
+
+    // --- Tab 切换 ---
+    const tabBtns = document.querySelectorAll('.tab-btn');
+    const loginForms = document.querySelectorAll('.login-form');
+
+    tabBtns.forEach(btn => {
+        btn.addEventListener('click', () => {
+            // 切换 tab 按钮状态
+            tabBtns.forEach(b => b.classList.remove('active'));
+            btn.classList.add('active');
+
+            // 切换表单显示
+            const tab = btn.dataset.tab;
+            loginForms.forEach(f => f.classList.remove('active'));
+            document.querySelector(`.login-form[data-form="${tab}"]`).classList.add('active');
+
+            // 清空消息
+            msgBox.className = 'msg-box';
+        });
+    });
+
+    // --- 密码登录 ---
+    const passForm = document.getElementById('passForm');
+    const passUsername = document.getElementById('passUsername');
+    const passPassword = document.getElementById('passPassword');
+    const passCaptcha = document.getElementById('passCaptcha');
+    const passSubmitBtn = document.getElementById('passSubmitBtn');
+    const captchaBtn = document.getElementById('captchaBtn');
+    const passBtnText = passSubmitBtn.querySelector('.btn-text');
+
+    // 获取验证码按钮
+    captchaBtn.addEventListener('click', () => {
+        const url = 'https://www.mefrp.com/3rdparty/captcha?client=Fan-ME-FRP-Launcher';
+        fetch('/api/openurl', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ url: url })
+        })
+        .then(res => res.json())
+        .then(data => {
+            if (data.code !== 200) {
+                showMsg(data.message || 'OMG BRO 没浏览器我也无能为力啊');
+            } else {
+                showMsg('已打开浏览器，请完成人机验证后复制验证码', false);
+            }
+        })
+        .catch(() => {
+            showMsg('OMG BRO 没浏览器我也无能为力啊');
+        });
+    });
+
+    const setPassLoading = (loading) => {
+        if (loading) {
+            passBtnText.textContent = '登录中...';
+            passSubmitBtn.disabled = true;
+            passSubmitBtn.style.opacity = '0.7';
+        } else {
+            passBtnText.textContent = '密码登录';
+            passSubmitBtn.disabled = false;
+            passSubmitBtn.style.opacity = '1';
+        }
+    };
+
+    passForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const username = passUsername.value.trim();
+        const password = passPassword.value.trim();
+        const captcha = passCaptcha.value.trim();
+
+        if (!username) {
+            showMsg('请输入用户名');
+            return;
+        }
+        if (!password) {
+            showMsg('请输入密码');
+            return;
+        }
+        if (!captcha) {
+            showMsg('请获取并输入人机验证码');
+            return;
+        }
+
+        setPassLoading(true);
+        showMsg('', false);
+
+        try {
+            const res = await fetch('/api/passlogin', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    username: username,
+                    password: password,
+                    captchaToken: captcha
+                })
+            });
+            const data = await res.json();
+
+            if (data.code === 200) {
+                showMsg('登录成功！正在跳转...', false);
+                setTimeout(() => { window.location.href = '/dashboard.html'; }, 500);
+            } else {
+                showMsg(data.message || '登录失败');
+            }
+        } catch (err) {
+            showMsg('网络错误，请检查本地服务');
+        } finally {
+            setPassLoading(false);
+        }
+    });
 
 </script>
 
