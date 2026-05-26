@@ -275,7 +275,7 @@ public class GuiApiServer {
         try {
             String accesstoken = extractJsonString(body, "accesstoken");
             if (accesstoken == null || accesstoken.isEmpty()) {
-                LOG.warning("[handleLogin] 缺少 accesstoken 参数, body=" + body);
+                LOG.warning("[handleLogin] 缺少 accesstoken 参数");
                 return "{\"code\":400,\"message\":\"缺少 accesstoken 参数\"}";
             }
 
@@ -346,7 +346,7 @@ public class GuiApiServer {
             // 验证 token 是否仍然有效
             int apiCode = verifyToken(accesstoken);
             if (apiCode == 200) {
-                return "{\"code\":200,\"message\":\"Token 有效\",\"accesstoken\":\"" + accesstoken + "\"}";
+                return "{\"code\":200,\"message\":\"Token 有效\"}";
             } else {
                 // token 失效，删除配置文件
                 Files.deleteIfExists(configFile);
@@ -574,8 +574,8 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/proxy/create";
             LOG.info("[handleNewProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleNewProxy] >>> 原始请求体: " + body);
-            LOG.info("[handleNewProxy] >>> 标准化请求体: " + upstreamBody);
+            LOG.info("[handleNewProxy] >>> 原始请求体: " + maskSensitiveBody(body));
+            LOG.info("[handleNewProxy] >>> 标准化请求体: " + maskSensitiveBody(upstreamBody));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -660,7 +660,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/node/freePort";
             LOG.info("[handleFreePort] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleFreePort] >>> 请求体: " + body);
+            LOG.info("[handleFreePort] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -690,7 +690,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleFreePort] <<< 上游响应体: " + respStr);
+            LOG.info("[handleFreePort] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -785,7 +785,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/proxy/update";
             LOG.info("[handleUpdateProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleUpdateProxy] >>> 请求体: " + body);
+            LOG.info("[handleUpdateProxy] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -815,7 +815,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleUpdateProxy] <<< 上游响应体: " + respStr);
+            LOG.info("[handleUpdateProxy] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -849,7 +849,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/proxy/kick";
             LOG.info("[handleKickProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleKickProxy] >>> 请求体: " + body);
+            LOG.info("[handleKickProxy] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -879,7 +879,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleKickProxy] <<< 上游响应体: " + respStr);
+            LOG.info("[handleKickProxy] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -913,7 +913,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/proxy/toggle";
             LOG.info("[handleBanUnProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleBanUnProxy] >>> 请求体: " + body);
+            LOG.info("[handleBanUnProxy] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -943,7 +943,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleBanUnProxy] <<< 上游响应体: " + respStr);
+            LOG.info("[handleBanUnProxy] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -977,7 +977,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/proxy/delete";
             LOG.info("[handleDelProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleDelProxy] >>> 请求体: " + body);
+            LOG.info("[handleDelProxy] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -1007,7 +1007,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleDelProxy] <<< 上游响应体: " + respStr);
+            LOG.info("[handleDelProxy] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -1051,7 +1051,7 @@ public class GuiApiServer {
             String apiUrl = ME_FRP_API + "/auth/proxy/config";
             String requestBody = "{\"proxyId\":" + proxyId + ",\"format\":\"toml\"}";
             LOG.info("[handleStartProxy] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleStartProxy] >>> 请求体: " + requestBody);
+            LOG.info("[handleStartProxy] >>> 请求体: " + maskSensitiveBody(requestBody));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -1081,7 +1081,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleStartProxy] <<< 上游响应体: " + respStr);
+            LOG.info("[handleStartProxy] <<< 上游响应体: " + maskSensitiveBody(respStr));
 
             if (responseCode != 200) {
                 return respStr;
@@ -1183,7 +1183,7 @@ public class GuiApiServer {
                 LOG.info("[handleStopProxy] 步骤2: 调用 ME Frp API 禁用隧道, proxyId=" + proxyId);
                 String toggleBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":true}";
                 String toggleResp = callMeFrpApi("/auth/proxy/toggle", toggleBody, accesstoken);
-                LOG.info("[handleStopProxy] 禁用隧道响应: " + toggleResp);
+                LOG.info("[handleStopProxy] 禁用隧道响应: " + maskSensitiveBody(toggleResp));
             } catch (Exception e) {
                 LOG.warning("[handleStopProxy] 禁用隧道失败: " + e.getMessage());
             }
@@ -1194,7 +1194,7 @@ public class GuiApiServer {
                 LOG.info("[handleStopProxy] 步骤3: 调用 ME Frp API 强制下线, proxyId=" + proxyId);
                 String kickBody = "{\"proxyId\":" + proxyId + "}";
                 String kickResp = callMeFrpApi("/auth/proxy/kick", kickBody, accesstoken);
-                LOG.info("[handleStopProxy] 强制下线响应: " + kickResp);
+                LOG.info("[handleStopProxy] 强制下线响应: " + maskSensitiveBody(kickResp));
             } catch (Exception e) {
                 LOG.warning("[handleStopProxy] 强制下线失败: " + e.getMessage());
             }
@@ -1205,7 +1205,7 @@ public class GuiApiServer {
                 LOG.info("[handleStopProxy] 步骤4: 调用 ME Frp API 启用隧道, proxyId=" + proxyId);
                 String enableBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":false}";
                 String enableResp = callMeFrpApi("/auth/proxy/toggle", enableBody, accesstoken);
-                LOG.info("[handleStopProxy] 启用隧道响应: " + enableResp);
+                LOG.info("[handleStopProxy] 启用隧道响应: " + maskSensitiveBody(enableResp));
             } catch (Exception e) {
                 LOG.warning("[handleStopProxy] 启用隧道失败: " + e.getMessage());
             }
@@ -1537,7 +1537,7 @@ public class GuiApiServer {
 
             String apiUrl = ME_FRP_API + "/auth/user/sign";
             LOG.info("[handleSign] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleSign] >>> 请求体: " + body);
+            LOG.info("[handleSign] >>> 请求体: " + maskSensitiveBody(body));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -1567,7 +1567,7 @@ public class GuiApiServer {
             conn.disconnect();
 
             String respStr = apiResponse.toString();
-            LOG.info("[handleSign] <<< 上游响应体: " + respStr);
+            LOG.info("[handleSign] <<< 上游响应体: " + maskSensitiveBody(respStr));
             return respStr;
 
         } catch (Exception e) {
@@ -1813,6 +1813,20 @@ public class GuiApiServer {
         int end = json.indexOf("\"", start);
         if (end < 0) return null;
         return json.substring(start, end);
+    }
+
+    /**
+     * 对日志中的 body 进行脱敏处理，替换敏感字段（如 accesstoken、token）的值
+     */
+    private String maskSensitiveBody(String body) {
+        if (body == null || body.isEmpty()) return body;
+        // 替换 "accesstoken":"xxx" 或 "accesstoken": "xxx"
+        String masked = body.replaceAll("\"accesstoken\"\\s*:\\s*\"[^\"]*\"", "\"accesstoken\":\"***\"");
+        // 替换 "token":"xxx" 或 "token": "xxx"
+        masked = masked.replaceAll("\"token\"\\s*:\\s*\"[^\"]*\"", "\"token\":\"***\"");
+        // 替换 "captchaToken":"xxx" 或 "captchaToken": "xxx"
+        masked = masked.replaceAll("\"captchaToken\"\\s*:\\s*\"[^\"]*\"", "\"captchaToken\":\"***\"");
+        return masked;
     }
 
     /**
