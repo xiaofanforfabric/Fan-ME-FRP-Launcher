@@ -387,7 +387,8 @@ public class GuiApiServer {
             // 验证 token 是否仍然有效
             int apiCode = verifyToken(accesstoken);
             if (apiCode == 200) {
-                return "{\"code\":200,\"message\":\"Token 有效\"}";
+                // 返回 accesstoken 供前端自动登录使用
+                return "{\"code\":200,\"message\":\"Token 有效\",\"accesstoken\":\"" + escapeJsonString(accesstoken) + "\"}";
             } else {
                 // token 失效，删除配置文件
                 Files.deleteIfExists(configFile);
