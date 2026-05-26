@@ -4,7 +4,7 @@
     <!-- 抑制 Logback 自身启动日志 -->
     <statusListener class="ch.qos.logback.core.status.NopStatusListener" />
 
-    <!-- ====== 文件输出（固定为 last.logs，由 Java 代码动态设置路径） ====== -->
+    <!-- 文件输出（固定为 last.logs，由 Java 代码动态设置路径） -->
     <appender name="FILE" class="ch.qos.logback.core.FileAppender">
         <append>false</append>
         <encoder>
@@ -13,12 +13,21 @@
         </encoder>
     </appender>
 
-    <!-- ====== 根日志级别 ====== -->
+    <!-- 调试模式文件输出（带级别前缀，便于区分） -->
+    <appender name="FILE_DEBUG" class="ch.qos.logback.core.FileAppender">
+        <append>false</append>
+        <encoder>
+            <pattern>[%level] [%logger{0}] %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- 根日志级别（默认 INFO，可通过 debug 切换为 DEBUG） -->
     <root level="INFO">
         <appender-ref ref="FILE"/>
     </root>
 
-    <!-- ====== 第三方库日志级别 ====== -->
+    <!-- 第三方库日志级别 -->
     <logger name="org.apache" level="WARN"/>
     <logger name="com.gargoylesoftware" level="WARN"/>
     <logger name="net.sourceforge" level="WARN"/>
