@@ -1,5 +1,6 @@
 package com.xiaofan.launcher.api;
 
+import java.awt.Desktop;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
@@ -9,6 +10,7 @@ import java.net.HttpURLConnection;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
+import java.net.URI;
 import java.net.URL;
 import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
@@ -209,7 +211,12 @@ public class GuiApiServer {
             } else if ("GET".equalsIgnoreCase(method) && "/api/server_important_info".equals(path)) {
                 String response = handleServerImportantInfo();
                 sendJsonResponse(out, 200, response);
-
+            } else if ("POST".equalsIgnoreCase(method) && "/api/sign".equals(path)) {
+                String response = handleSign(body);
+                sendJsonResponse(out, 200, response);
+            } else if ("POST".equalsIgnoreCase(method) && "/api/openurl".equals(path)) {
+                String response = handleOpenUrl(body);
+                sendJsonResponse(out, 200, response);
             } else {
 
 
@@ -1503,6 +1510,101 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handleServerImportantInfo] 获取重要公告异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"错误，请查看日志并联系开发者获得支持\"}";
+        }
+    }
+
+    /**
+     * 处理 POST /api/sign - 签到
+     * 将前端 body 原样转发到 ME Frp API /auth/user/sign
+     * 需要携带 Authorization: Bearer token
+     */
+    private String handleSign(String body) {
+        try {
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (!Files.exists(configFile)) {
+                LOG.warning("[handleSign] config.json 不存在");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+            String encoded = extractJsonString(content, "accesstoken");
+            if (encoded == null || encoded.isEmpty()) {
+                LOG.warning("[handleSign] config.json 中 accesstoken 为空");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+
+            String apiUrl = ME_FRP_API + "/auth/user/sign";
+            LOG.info("[handleSign] >>> 请求上游: POST " + apiUrl);
+            LOG.info("[handleSign] >>> 请求体: " + body);
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
+            conn.getOutputStream().write(bodyBytes);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleSign] <<< 上游返回: HTTP " + responseCode);
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(
+                            responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                            StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleSign] <<< 上游响应体: " + respStr);
+            return respStr;
+
+        } catch (Exception e) {
+            LOG.severe("[handleSign] 签到异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"签到失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * 处理 POST /api/openurl - 用系统默认浏览器打开指定 URL
+     * 先检查是否有可用的浏览器（非 IE），有则打开，无则返回错误
+     * Body: {"url": "https://..."}
+     */
+    private String handleOpenUrl(String body) {
+        try {
+            String url = extractJsonString(body, "url");
+            if (url == null || url.isEmpty()) {
+                return "{\"code\":400,\"message\":\"缺少 url 参数\"}";
+            }
+
+            // 检查 Desktop 是否支持 browse（即是否有默认浏览器）
+            if (!Desktop.isDesktopSupported()) {
+                return "{\"code\":500,\"message\":\"OMG BRO 没浏览器我也无能为力啊\"}";
+            }
+
+            Desktop desktop = Desktop.getDesktop();
+            if (!desktop.isSupported(Desktop.Action.BROWSE)) {
+                return "{\"code\":500,\"message\":\"OMG BRO 没浏览器我也无能为力啊\"}";
+            }
+
+            desktop.browse(new URI(url));
+            LOG.info("[handleOpenUrl] 已打开浏览器: " + url);
+            return "{\"code\":200,\"message\":\"已打开浏览器\"}";
+
+        } catch (Exception e) {
+            LOG.severe("[handleOpenUrl] 打开浏览器失败: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"OMG BRO 没浏览器我也无能为力啊\"}";
         }
     }
 
