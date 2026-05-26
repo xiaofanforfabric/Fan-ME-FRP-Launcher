@@ -1182,6 +1182,7 @@ public class GuiApiServer {
                 Thread.sleep(100);
                 LOG.info("[handleStopProxy] 步骤2: 调用 ME Frp API 禁用隧道, proxyId=" + proxyId);
                 String toggleBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":true}";
+                LOG.info("[handleStopProxy] 禁用隧道请求体: " + maskSensitiveBody(toggleBody));
                 String toggleResp = callMeFrpApi("/auth/proxy/toggle", toggleBody, accesstoken);
                 LOG.info("[handleStopProxy] 禁用隧道响应: " + maskSensitiveBody(toggleResp));
             } catch (Exception e) {
@@ -1193,6 +1194,7 @@ public class GuiApiServer {
                 Thread.sleep(100);
                 LOG.info("[handleStopProxy] 步骤3: 调用 ME Frp API 强制下线, proxyId=" + proxyId);
                 String kickBody = "{\"proxyId\":" + proxyId + "}";
+                LOG.info("[handleStopProxy] 强制下线请求体: " + maskSensitiveBody(kickBody));
                 String kickResp = callMeFrpApi("/auth/proxy/kick", kickBody, accesstoken);
                 LOG.info("[handleStopProxy] 强制下线响应: " + maskSensitiveBody(kickResp));
             } catch (Exception e) {
@@ -1204,6 +1206,7 @@ public class GuiApiServer {
                 Thread.sleep(100);
                 LOG.info("[handleStopProxy] 步骤4: 调用 ME Frp API 启用隧道, proxyId=" + proxyId);
                 String enableBody = "{\"proxyId\":" + proxyId + ",\"isDisabled\":false}";
+                LOG.info("[handleStopProxy] 启用隧道请求体: " + maskSensitiveBody(enableBody));
                 String enableResp = callMeFrpApi("/auth/proxy/toggle", enableBody, accesstoken);
                 LOG.info("[handleStopProxy] 启用隧道响应: " + maskSensitiveBody(enableResp));
             } catch (Exception e) {
@@ -1572,7 +1575,7 @@ public class GuiApiServer {
 
         } catch (Exception e) {
             LOG.severe("[handleSign] 签到异常: " + e.getMessage());
-            return "{\"code\":500,\"message\":\"签到失败: " + e.getMessage() + "\"}";
+            return "{\"code\":500,\"message\":\"签到失败，请稍后重试\"}";
         }
     }
 
