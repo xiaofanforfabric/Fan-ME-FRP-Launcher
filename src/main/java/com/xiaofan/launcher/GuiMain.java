@@ -42,11 +42,22 @@ public class GuiMain {
     private static final String INDEX_ZIP_URL_DONATE = "https://oss.xiaoli.top/index.zip";
 
     public static void launchGui(String[] args) {
+        // 从 args 中解析 --debug 参数
+        boolean debugMode = false;
+        if (args != null) {
+            for (String arg : args) {
+                if ("--debug".equals(arg)) {
+                    debugMode = true;
+                    break;
+                }
+            }
+        }
+        final boolean finalDebugMode = debugMode;
         // 使用 JFXPanel 初始化 JavaFX 工具包，避免继承 Application 导致的 GTK 问题
         new JFXPanel();
         Platform.runLater(() -> {
             try {
-                new GuiMain().start();
+                new GuiMain().start(finalDebugMode);
             } catch (Exception e) {
                 System.err.println("GUI 启动失败: " + e.getMessage());
                 e.printStackTrace();
@@ -57,6 +68,10 @@ public class GuiMain {
     }
 
     public void start() {
+        start(false);
+    }
+
+    public void start(boolean debugMode) {
         try {
             // ====== 第〇步：先初始化 frpc 依赖（下载动态库/二进制），再搞其他 ======
             System.out.println("正在初始化 frpc 运行环境...");
@@ -76,6 +91,7 @@ public class GuiMain {
             // 2. 启动 GUI API 服务（静态资源映射到 res/index/）
             apiServer = new GuiApiServer();
             apiServer.setStaticRoot(indexDir);
+            apiServer.setDebugMode(debugMode);
             apiServer.start();
 
             // 3. 在 JavaFX 线程中创建窗口

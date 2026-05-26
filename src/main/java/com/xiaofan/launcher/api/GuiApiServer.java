@@ -23,6 +23,9 @@ import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 import com.xiaofan.launcher.frpc.FrpcManager;
+import com.xiaofan.launcher.logs.DebugCrashException;
+import com.xiaofan.launcher.logs.DebugErrorException;
+import com.xiaofan.launcher.logs.ErrorReporter;
 
 /**
  * GUI API 服务 - 轻量 HTTP 服务器
@@ -57,6 +60,7 @@ public class GuiApiServer {
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private volatile boolean running = false;
+    private volatile boolean debugMode = false;
     private Path staticRoot;
     private Path resDir;
 
@@ -72,6 +76,14 @@ public class GuiApiServer {
      */
     public void setStaticRoot(Path staticRoot) {
         this.staticRoot = staticRoot;
+    }
+
+    /**
+     * 设置调试模式
+     * 仅在调试模式下，/debug/crash API 才可用
+     */
+    public void setDebugMode(boolean debugMode) {
+        this.debugMode = debugMode;
     }
 
     /**
@@ -220,6 +232,32 @@ public class GuiApiServer {
             } else if ("POST".equalsIgnoreCase(method) && "/api/passlogin".equals(path)) {
                 String response = handlePassLogin(body);
                 sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/debug/crash".equals(path)) {
+                // 仅在调试模式下可用
+                if (!debugMode) {
+                    sendError(out, 403, "{\"code\":403,\"message\":\"仅在 --debug 模式下可用\"}");
+                    return;
+                }
+                // 先返回响应，再触发崩溃
+                String crashMsg = "{\"code\":200,\"message\":\"正在生成崩溃报告...\"}";
+                sendJsonResponse(out, 200, crashMsg);
+                // 在新线程中触发崩溃，确保响应已发送
+                new Thread(() -> {
+                    try {
+                        Thread.sleep(500); // 等待响应发送完成
+                    } catch (InterruptedException ignored) {}
+                    handleDebugCrash();
+                }, "debug-crash-trigger").start();
+                return;
+            } else if ("GET".equalsIgnoreCase(method) && "/debug/error".equals(path)) {
+                // 仅在调试模式下可用
+                if (!debugMode) {
+                    sendError(out, 403, "{\"code\":403,\"message\":\"仅在 --debug 模式下可用\"}");
+                    return;
+                }
+                String result = handleDebugError();
+                sendJsonResponse(out, 200, result);
+                return;
             } else {
 
 
@@ -2061,6 +2099,59 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.warning("[decodeCaptchaToken] Base64 解码失败: " + e.getMessage());
             return null;
+        }
+    }
+
+    /**
+     * 处理 /debug/crash - 触发调试崩溃
+     * 仅在 --debug 模式下可用
+     * 直接抛出 DebugCrashException，触发 CrashReporter 生成崩溃报告
+     * 类似于 Minecraft 的 F3+C 长按 10 秒
+     */
+    private void handleDebugCrash() {
+        System.err.println("\n================================================================");
+        System.err.println("  /debug/crash 被调用！正在生成崩溃报告...");
+        System.err.println("  类似于 Minecraft 的 F3+C 长按 10 秒");
+        System.err.println("================================================================");
+
+        // 收集硬件信息到日志
+        LOG.severe("[debug/crash] 用户触发了调试崩溃！");
+        LOG.severe("[debug/crash] Java 版本: " + System.getProperty("java.version"));
+        LOG.severe("[debug/crash] Java 供应商: " + System.getProperty("java.vendor"));
+        LOG.severe("[debug/crash] 操作系统: " + System.getProperty("os.name") + " " + System.getProperty("os.version") + " " + System.getProperty("os.arch"));
+        LOG.severe("[debug/crash] CPU 核心数: " + Runtime.getRuntime().availableProcessors());
+        LOG.severe("[debug/crash] 最大内存: " + (Runtime.getRuntime().maxMemory() / 1024 / 1024) + " MB");
+        LOG.severe("[debug/crash] 可用内存: " + (Runtime.getRuntime().freeMemory() / 1024 / 1024) + " MB");
+        LOG.severe("[debug/crash] 已用内存: " + ((Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory()) / 1024 / 1024) + " MB");
+
+        // 直接抛出异常不捕获，让 CrashReporter 处理
+        throw new DebugCrashException();
+    }
+
+    /**
+     * 处理 /debug/error - 触发调试错误
+     * 仅在 --debug 模式下可用
+     * 使用 ErrorReporter 生成错误报告并保存到 error/ 目录
+     * 程序不会崩溃，只记录错误
+     */
+    private String handleDebugError() {
+        System.err.println("\n================================================================");
+        System.err.println("  /debug/error 被调用！正在生成错误报告...");
+        System.err.println("================================================================");
+
+        LOG.severe("[debug/error] 用户触发了调试错误！");
+
+        // 使用 ErrorReporter 记录错误
+        String jarDir = getJarDir();
+        ErrorReporter errorReporter = new ErrorReporter(jarDir);
+        DebugErrorException exception = new DebugErrorException();
+        Path errorFile = errorReporter.reportError(exception, "由 /debug/error API 触发");
+
+        if (errorFile != null) {
+            System.err.println("错误报告已保存至: " + errorFile.toAbsolutePath());
+            return "{\"code\":200,\"message\":\"错误报告已生成\",\"file\":\"" + errorFile.toAbsolutePath().toString().replace("\\", "\\\\") + "\"}";
+        } else {
+            return "{\"code\":500,\"message\":\"错误报告生成失败\"}";
         }
     }
 
