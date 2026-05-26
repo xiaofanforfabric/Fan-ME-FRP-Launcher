@@ -217,6 +217,9 @@ public class GuiApiServer {
             } else if ("POST".equalsIgnoreCase(method) && "/api/openurl".equals(path)) {
                 String response = handleOpenUrl(body);
                 sendJsonResponse(out, 200, response);
+            } else if ("POST".equalsIgnoreCase(method) && "/api/passlogin".equals(path)) {
+                String response = handlePassLogin(body);
+                sendJsonResponse(out, 200, response);
             } else {
 
 
@@ -1612,6 +1615,120 @@ public class GuiApiServer {
     }
 
     /**
+     * 处理 POST /api/passlogin - 密码登录
+     * 调用 ME Frp API /public/login 进行密码登录
+     * 从返回的 data.token 中提取 token，复用 handleLogin 的保存逻辑
+     * Body: {"username": "xxx", "password": "xxx", "captchaToken": "xxx"}
+     */
+    private String handlePassLogin(String body) {
+        try {
+            String username = extractJsonString(body, "username");
+            String password = extractJsonString(body, "password");
+            String captchaToken = extractJsonString(body, "captchaToken");
+
+            if (username == null || username.isEmpty()) {
+                return "{\"code\":400,\"message\":\"缺少用户名\"}";
+            }
+            if (password == null || password.isEmpty()) {
+                return "{\"code\":400,\"message\":\"缺少密码\"}";
+            }
+            if (captchaToken == null || captchaToken.isEmpty()) {
+                return "{\"code\":400,\"message\":\"缺少人机验证\"}";
+            }
+
+            // 人机验证码是 Base64 编码的 "token||client" 格式
+            // 需要解码后提取 token 部分作为 captchaToken 提交
+            String decodedCaptcha = decodeCaptchaToken(captchaToken);
+            if (decodedCaptcha == null) {
+                LOG.warning("[handlePassLogin] 人机验证码 Base64 解码失败: " + captchaToken);
+                return "{\"code\":400,\"message\":\"人机验证码格式错误\"}";
+            }
+            LOG.info("[handlePassLogin] 人机验证码解码结果: " + decodedCaptcha);
+
+            // 用解码后的 captchaToken 替换原 body 中的值
+            String upstreamBody = body.replaceAll(
+                "\"captchaToken\"\\s*:\\s*\"" + captchaToken + "\"",
+                "\"captchaToken\":\"" + decodedCaptcha + "\"");
+
+            LOG.info("[handlePassLogin] 收到密码登录请求, username=" + username);
+
+            // 1. 调用 ME Frp API /public/login
+            String apiUrl = ME_FRP_API + "/public/login";
+            LOG.info("[handlePassLogin] >>> 请求上游: POST " + apiUrl);
+            LOG.info("[handlePassLogin] >>> 请求体: " + maskSensitiveBody(upstreamBody));
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            byte[] bodyBytes = upstreamBody.getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
+            conn.getOutputStream().write(bodyBytes);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handlePassLogin] <<< 上游返回: HTTP " + responseCode);
+
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(
+                            responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                            StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handlePassLogin] <<< 上游响应体: " + maskSensitiveBody(respStr));
+
+            // 2. 检查上游返回的 code
+            int upstreamCode = extractJsonInt(respStr, "code");
+            if (upstreamCode != 200) {
+                // 直接透传上游的错误消息
+                String upstreamMsg = extractJsonString(respStr, "message");
+                if (upstreamMsg == null) upstreamMsg = "登录失败";
+                return "{\"code\":" + upstreamCode + ",\"message\":\"" + upstreamMsg + "\"}";
+            }
+
+            // 3. 从 data.token 中提取 token
+            // 上游返回格式: {"code":200,"data":{"group":"sponsor","token":"xxx","username":"xiaofan"},"message":"已成功登录, 欢迎回来"}
+            // 需要从 data 字段中提取 token
+            String dataStr = extractJsonRaw(respStr, "data");
+            if (dataStr == null || dataStr.isEmpty()) {
+                LOG.severe("[handlePassLogin] 上游返回的 data 为空");
+                return "{\"code\":500,\"message\":\"登录失败：上游返回数据异常\"}";
+            }
+            String token = extractJsonString(dataStr, "token");
+            if (token == null || token.isEmpty()) {
+                LOG.severe("[handlePassLogin] 上游返回的 data 中缺少 token");
+                return "{\"code\":500,\"message\":\"登录失败：未获取到访问令牌\"}";
+            }
+
+            LOG.info("[handlePassLogin] 密码登录成功，获取到 token");
+
+            // 4. 复用 handleLogin 的保存逻辑
+            try {
+                saveToken(token);
+                LOG.info("[handlePassLogin] Token 已保存到 config.json");
+            } catch (IOException e) {
+                LOG.warning("[handlePassLogin] 保存 token 失败: " + e.getMessage());
+            }
+
+            return "{\"code\":200,\"message\":\"登录成功\"}";
+
+        } catch (Exception e) {
+            LOG.severe("[handlePassLogin] 密码登录异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"登录失败，请稍后重试\"}";
+        }
+    }
+
+    /**
      * 转义 JSON 字符串中的特殊字符
      */
     private String escapeJsonString(String s) {
@@ -1819,6 +1936,69 @@ public class GuiApiServer {
     }
 
     /**
+     * 从 JSON 字符串中提取指定 key 的原始值（支持嵌套对象）
+     * 例如: {"data":{"token":"xxx"}} 提取 "data" 返回 {"token":"xxx"}
+     */
+    private String extractJsonRaw(String json, String key) {
+        if (json == null || json.isEmpty()) return null;
+        String searchKey = "\"" + key + "\":";
+        int start = json.indexOf(searchKey);
+        if (start < 0) {
+            searchKey = "\"" + key + "\": ";
+            start = json.indexOf(searchKey);
+        }
+        if (start < 0) return null;
+        start += searchKey.length();
+        while (start < json.length() && json.charAt(start) == ' ') start++;
+        if (start >= json.length()) return null;
+        
+        char firstChar = json.charAt(start);
+        if (firstChar == '{') {
+            // 提取嵌套对象
+            int depth = 1;
+            int end = start + 1;
+            while (end < json.length() && depth > 0) {
+                char c = json.charAt(end);
+                if (c == '{') depth++;
+                else if (c == '}') depth--;
+                if (depth > 0) end++;
+            }
+            return json.substring(start, end + 1);
+        } else if (firstChar == '"') {
+            // 提取字符串
+            int end = start + 1;
+            while (end < json.length()) {
+                char c = json.charAt(end);
+                if (c == '\\') {
+                    end += 2;
+                    continue;
+                }
+                if (c == '"') break;
+                end++;
+            }
+            return json.substring(start, end + 1);
+        } else if (firstChar == '[') {
+            // 提取数组
+            int depth = 1;
+            int end = start + 1;
+            while (end < json.length() && depth > 0) {
+                char c = json.charAt(end);
+                if (c == '[') depth++;
+                else if (c == ']') depth--;
+                if (depth > 0) end++;
+            }
+            return json.substring(start, end + 1);
+        } else {
+            // 提取数字或布尔值
+            int end = start;
+            while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-' || json.charAt(end) == '.' || json.charAt(end) == 'e' || json.charAt(end) == 'E' || json.charAt(end) == '+' || json.charAt(end) == 't' || json.charAt(end) == 'f' || json.charAt(end) == 'n')) {
+                end++;
+            }
+            return json.substring(start, end);
+        }
+    }
+
+    /**
      * 对日志中的 body 进行脱敏处理，替换敏感字段（如 accesstoken、token）的值
      */
     private String maskSensitiveBody(String body) {
@@ -1827,8 +2007,8 @@ public class GuiApiServer {
         String masked = body.replaceAll("\"accesstoken\"\\s*:\\s*\"[^\"]*\"", "\"accesstoken\":\"***\"");
         // 替换 "token":"xxx" 或 "token": "xxx"
         masked = masked.replaceAll("\"token\"\\s*:\\s*\"[^\"]*\"", "\"token\":\"***\"");
-        // 替换 "captchaToken":"xxx" 或 "captchaToken": "xxx"
-        masked = masked.replaceAll("\"captchaToken\"\\s*:\\s*\"[^\"]*\"", "\"captchaToken\":\"***\"");
+        // 注意：captchaToken 不脱敏，因为人机验证 token 是一次性的，
+        // 能打印出来的肯定都是用过的，泄漏无关紧要
         return masked;
     }
 
@@ -1857,6 +2037,31 @@ public class GuiApiServer {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 解码人机验证码
+     * 人机验证码是 Base64 编码的 "token||client" 格式
+     * 解码后提取 "||" 前面的 token 部分返回
+     * @param encoded Base64 编码的验证码
+     * @return 解码后的 token，如果解码失败返回 null
+     */
+    private String decodeCaptchaToken(String encoded) {
+        if (encoded == null || encoded.isEmpty()) return null;
+        try {
+            byte[] decodedBytes = Base64.getDecoder().decode(encoded);
+            String decoded = new String(decodedBytes, StandardCharsets.UTF_8);
+            // 格式: "token||client"，提取 token 部分
+            int splitIndex = decoded.indexOf("||");
+            if (splitIndex > 0) {
+                return decoded.substring(0, splitIndex);
+            }
+            // 如果没有 ||，直接返回解码结果
+            return decoded;
+        } catch (Exception e) {
+            LOG.warning("[decodeCaptchaToken] Base64 解码失败: " + e.getMessage());
+            return null;
+        }
     }
 
     private static String getJarDir() {
