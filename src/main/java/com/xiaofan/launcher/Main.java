@@ -231,7 +231,7 @@ public class Main {
             if (!Files.exists(loginHtml)) {
                 Path existingLogin = Paths.get(jarDir, "res", "index", "login.html");
                 if (Files.exists(existingLogin)) {
-                    Files.copy(existingLogin, loginHtml);
+                    Files.copy(existingLogin, loginHtml, java.nio.file.StandardCopyOption.REPLACE_EXISTING);
                     System.out.println("已复制前端资源");
                 } else {
                     System.out.println("警告: 未找到前端资源，API 服务仍可正常使用");
