@@ -376,6 +376,7 @@ public class ApiServer extends NanoHTTPD {
         if (name == null || name.isEmpty()) return "unknown";
         // 替换 Windows/Linux 文件系统非法字符
         return name.replaceAll("[\\\\/:*?\"<>|]", "_")
+                   .replaceAll("\\.\\.", "_")
                    .replaceAll("\\s+", "_")
                    .trim();
     }
