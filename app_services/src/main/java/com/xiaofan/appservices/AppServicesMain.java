@@ -49,7 +49,8 @@ public class AppServicesMain {
             AppConfig.APP_FILE
         );
         try {
-            apiServer.start();
+            // 设置 100 秒 socket 读取超时，以支持大文件上传
+            apiServer.start(100000, false);
             System.out.println("  ✅ API 服务已启动 (端口 " + AppConfig.API_PORT + ")");
         } catch (IOException e) {
             System.err.println("  ❌ API 服务启动失败: " + e.getMessage());

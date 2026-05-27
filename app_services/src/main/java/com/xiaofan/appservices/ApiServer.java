@@ -139,26 +139,6 @@ public class ApiServer extends NanoHTTPD {
         Response response = null;
 
         try {
-            // 解析请求体（POST/PUT/DELETE）
-            Map<String, String> body = new HashMap<>();
-            if (method == Method.POST || method == Method.PUT || method == Method.DELETE) {
-                Integer size = Integer.parseInt(session.getHeaders().getOrDefault("content-length", "0"));
-                if (size > 0) {
-                    byte[] buf = new byte[size];
-                    session.getInputStream().read(buf);
-                    String bodyStr = new String(buf, StandardCharsets.UTF_8);
-                    try {
-                        @SuppressWarnings("unchecked")
-                        Map<String, Object> parsed = gson.fromJson(bodyStr, Map.class);
-                        if (parsed != null) {
-                            for (Map.Entry<String, Object> e : parsed.entrySet()) {
-                                body.put(e.getKey(), e.getValue() != null ? e.getValue().toString() : "");
-                            }
-                        }
-                    } catch (Exception ignored) {}
-                }
-            }
-
             switch (uri) {
                 // ====== tpca.json - 获取完整更新日志 ======
                 case "/tpca.json":
@@ -281,14 +261,19 @@ public class ApiServer extends NanoHTTPD {
             }
 
             // 2. 读取原始请求体
-            byte[] rawBody = new byte[contentLength];
-            int totalRead = 0;
-            while (totalRead < contentLength) {
-                int read = session.getInputStream().read(rawBody, totalRead, contentLength - totalRead);
-                if (read == -1) break;
-                totalRead += read;
+            // NanoHTTPD 的 getInputStream() 可能已被消费，改用 getQueryParameterString()
+            String bodyStr = session.getQueryParameterString();
+            if (bodyStr == null || bodyStr.isEmpty()) {
+                // 如果 getQueryParameterString() 返回空，尝试从 InputStream 读取
+                byte[] rawBody = new byte[contentLength];
+                int totalRead = 0;
+                while (totalRead < contentLength) {
+                    int read = session.getInputStream().read(rawBody, totalRead, contentLength - totalRead);
+                    if (read == -1) break;
+                    totalRead += read;
+                }
+                bodyStr = new String(rawBody, 0, totalRead, StandardCharsets.UTF_8);
             }
-            String bodyStr = new String(rawBody, 0, totalRead, StandardCharsets.UTF_8);
 
             // 3. 解析 JSON
             @SuppressWarnings("unchecked")

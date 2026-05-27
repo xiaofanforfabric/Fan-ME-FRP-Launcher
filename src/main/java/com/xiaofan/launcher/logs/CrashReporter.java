@@ -1,7 +1,10 @@
 package com.xiaofan.launcher.logs;
 
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.FileInputStream;
 import java.io.FileOutputStream;
+import java.io.OutputStream;
 import java.io.PrintWriter;
 import java.io.StringWriter;
 import java.lang.management.ManagementFactory;
@@ -10,12 +13,18 @@ import java.lang.management.OperatingSystemMXBean;
 import java.lang.management.RuntimeMXBean;
 import java.lang.management.ThreadInfo;
 import java.lang.management.ThreadMXBean;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.text.SimpleDateFormat;
+import java.util.Base64;
 import java.util.Date;
 import java.util.Locale;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipOutputStream;
 
 /**
  * 崩溃报告生成器
@@ -61,12 +70,13 @@ public class CrashReporter implements Thread.UncaughtExceptionHandler {
 
     @Override
     public void uncaughtException(Thread t, Throwable e) {
+        Path crashFile = null;
         try {
             // 生成崩溃报告
             String crashReport = generateCrashReport(t, e);
 
             // 保存到文件
-            Path crashFile = saveCrashReport(crashReport);
+            crashFile = saveCrashReport(crashReport);
 
             // 输出到控制台
             System.err.println("\n" + LINE_SEPARATOR);
@@ -83,6 +93,15 @@ public class CrashReporter implements Thread.UncaughtExceptionHandler {
             e.printStackTrace(System.err);
             System.err.println("报告生成异常:");
             ex.printStackTrace(System.err);
+        }
+
+        // ====== 检查 EULA 并上传崩溃报告 ======
+        if (crashFile != null) {
+            try {
+                uploadCrashReportIfEulaAgreed(crashFile);
+            } catch (Exception ignored) {
+                // 上传失败不影响程序退出
+            }
         }
 
         // 调用默认处理器（如果有）
@@ -388,5 +407,194 @@ public class CrashReporter implements Thread.UncaughtExceptionHandler {
         long days = hours / 24;
         return String.format("%d 天 %d 小时 %d 分钟 %d 秒",
             days, hours % 24, minutes % 60, seconds % 60);
+    }
+
+    // ==================== EULA 检查与崩溃报告上传 ====================
+
+    /**
+     * 检查 EULA 是否同意，如果同意则将崩溃报告和 last.logs 打包上传
+     * 
+     * 流程：
+     * 1. 检查 res/eula.txt 是否存在且内容为 eula=true
+     * 2. 如果同意，将 crash 文件和 logs/last.logs 打包成 zip
+     * 3. 放在 JAR 同目录的 tmp 文件夹
+     * 4. 将 zip 文件 base64 编码
+     * 5. 检查编码后数据是否超过 10MB
+     * 6. 如果没超过，POST 到 https://frpc.xiaofanshop.cn/api/inputlog
+     */
+    private void uploadCrashReportIfEulaAgreed(Path crashFile) {
+        // 1. 检查 EULA
+        Path eulaFile = Paths.get(jarDir, "res", "eula.txt");
+        if (!Files.exists(eulaFile)) {
+            System.err.println("[CrashReporter] eula.txt 不存在，跳过崩溃报告上传");
+            return;
+        }
+        try {
+            String content = new String(Files.readAllBytes(eulaFile), StandardCharsets.UTF_8).trim();
+            boolean eulaAgreed = false;
+            for (String line : content.split("\\n")) {
+                line = line.trim().toLowerCase();
+                if (line.equals("eula=true")) {
+                    eulaAgreed = true;
+                    break;
+                }
+            }
+            if (!eulaAgreed) {
+                System.err.println("[CrashReporter] EULA 未同意，跳过崩溃报告上传");
+                return;
+            }
+        } catch (Exception e) {
+            System.err.println("[CrashReporter] 读取 eula.txt 失败: " + e.getMessage());
+            return;
+        }
+
+        System.err.println("[CrashReporter] EULA 已同意，正在打包崩溃报告...");
+
+        // 2. 打包 crash 文件和 last.logs 为 zip
+        Path tmpDir = Paths.get(jarDir, "tmp");
+        Path logsDir = Paths.get(jarDir, "logs");
+        Path lastLogs = logsDir.resolve("last.logs");
+
+        // 生成 zip 文件名（使用 crash 文件名的时间戳）
+        String crashFileName = crashFile.getFileName().toString();
+        String zipName = crashFileName.replace(CRASH_FILE_SUFFIX, ".zip");
+        Path zipFile = tmpDir.resolve(zipName);
+
+        try {
+            Files.createDirectories(tmpDir);
+
+            try (FileOutputStream fos = new FileOutputStream(zipFile.toFile());
+                 ZipOutputStream zos = new ZipOutputStream(fos)) {
+
+                // 添加崩溃报告文件
+                try (FileInputStream fis = new FileInputStream(crashFile.toFile())) {
+                    zos.putNextEntry(new ZipEntry(crashFileName));
+                    byte[] buffer = new byte[8192];
+                    int len;
+                    while ((len = fis.read(buffer)) > 0) {
+                        zos.write(buffer, 0, len);
+                    }
+                    zos.closeEntry();
+                }
+
+                // 添加 last.logs（如果存在）
+                if (Files.exists(lastLogs)) {
+                    try (FileInputStream fis = new FileInputStream(lastLogs.toFile())) {
+                        zos.putNextEntry(new ZipEntry("last.logs"));
+                        byte[] buffer = new byte[8192];
+                        int len;
+                        while ((len = fis.read(buffer)) > 0) {
+                            zos.write(buffer, 0, len);
+                        }
+                        zos.closeEntry();
+                    }
+                }
+            }
+
+            System.err.println("[CrashReporter] 打包完成: " + zipFile.toAbsolutePath());
+
+            // 3. 读取 zip 文件并 base64 编码
+            byte[] zipBytes = Files.readAllBytes(zipFile);
+            String base64Data = Base64.getEncoder().encodeToString(zipBytes);
+
+            // 4. 检查 base64 编码后数据是否超过 10MB
+            // base64 编码后大小约为原始大小的 4/3，所以检查 base64 字符串的字节数
+            int base64SizeBytes = base64Data.getBytes(StandardCharsets.UTF_8).length;
+            int maxSize = 10 * 1024 * 1024; // 10MB
+
+            if (base64SizeBytes > maxSize) {
+                System.err.println("[CrashReporter] 崩溃报告过大（base64: " + formatBytes(base64SizeBytes) + "），超过 10MB 限制，跳过上传");
+                return;
+            }
+
+            // 5. POST 到 https://frpc.xiaofanshop.cn/api/inputlog
+            System.err.println("[CrashReporter] 正在上传崩溃报告（" + formatBytes(base64SizeBytes) + "）...");
+
+            // 收集 CPU 信息
+            String cpuInfo = System.getProperty("os.arch", "unknown");
+            try {
+                String cpuModel = System.getenv("PROCESSOR_IDENTIFIER");
+                if (cpuModel != null && !cpuModel.isEmpty()) {
+                    cpuInfo = cpuModel;
+                } else {
+                    // Linux: 读取 /proc/cpuinfo
+                    Path cpuinfoPath = Paths.get("/proc/cpuinfo");
+                    if (Files.exists(cpuinfoPath)) {
+                        String cpuinfo = new String(Files.readAllBytes(cpuinfoPath), StandardCharsets.UTF_8);
+                        for (String line : cpuinfo.split("\\n")) {
+                            if (line.startsWith("model name")) {
+                                cpuInfo = line.substring(line.indexOf(':') + 1).trim();
+                                break;
+                            }
+                        }
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            // 收集 GPU 信息
+            String gpuInfo = "unknown";
+            try {
+                // Windows: 尝试读取注册表或使用 wmic
+                String osName = System.getProperty("os.name", "").toLowerCase();
+                if (osName.contains("windows")) {
+                    // 尝试读取环境变量（某些系统可能有）
+                    String gpuEnv = System.getenv("GPU_DEVICE_NAME");
+                    if (gpuEnv != null && !gpuEnv.isEmpty()) {
+                        gpuInfo = gpuEnv;
+                    }
+                } else if (osName.contains("linux")) {
+                    // Linux: 尝试读取 /proc/driver/nvidia/version 或 lspci
+                    Path nvidiaPath = Paths.get("/proc/driver/nvidia/version");
+                    if (Files.exists(nvidiaPath)) {
+                        gpuInfo = "NVIDIA GPU";
+                    }
+                }
+            } catch (Exception ignored) {}
+
+            String jsonBody = "{\"cpu\":\"" + escapeJson(cpuInfo) + "\",\"gpu\":\"" + escapeJson(gpuInfo) + "\",\"data\":\"" + base64Data + "\"}";
+
+            URL url = new URL("http://192.238.232.239:4102/api/inputlog");
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Content-Type", "application/json; charset=utf-8");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher-CrashReporter/1.0");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(15000);
+            conn.setReadTimeout(30000);
+
+            byte[] jsonBytes = jsonBody.getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Length", String.valueOf(jsonBytes.length));
+            try (OutputStream os = conn.getOutputStream()) {
+                os.write(jsonBytes);
+                os.flush();
+            }
+
+            int responseCode = conn.getResponseCode();
+            System.err.println("[CrashReporter] 上传完成，服务器响应: HTTP " + responseCode);
+            conn.disconnect();
+
+        } catch (Exception e) {
+            System.err.println("[CrashReporter] 上传崩溃报告失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 转义 JSON 字符串中的特殊字符
+     */
+    private static String escapeJson(String s) {
+        if (s == null) return "";
+        StringBuilder sb = new StringBuilder(s.length());
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':  sb.append("\\\""); break;
+                case '\\': sb.append("\\\\"); break;
+                case '\n': sb.append("\\n"); break;
+                case '\r': sb.append("\\r"); break;
+                case '\t': sb.append("\\t"); break;
+                default:   sb.append(c);
+            }
+        }
+        return sb.toString();
     }
 }
