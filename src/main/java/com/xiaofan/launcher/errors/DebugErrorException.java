@@ -1,4 +1,4 @@
-package com.xiaofan.launcher.logs;
+package com.xiaofan.launcher.errors;
 
 /**
  * 调试错误异常 - 由 /debug/error API 触发

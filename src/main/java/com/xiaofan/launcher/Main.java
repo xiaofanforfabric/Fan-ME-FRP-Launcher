@@ -13,7 +13,9 @@ import com.xiaofan.launcher.api.GuiApiServer;
 import com.xiaofan.launcher.frpc.EasyStartup;
 import com.xiaofan.launcher.frpc.FrpcManager;
 import com.xiaofan.launcher.frpc.JarUpdater;
+import com.xiaofan.launcher.errors.oneplusoneisnull;
 import com.xiaofan.launcher.logs.CrashReporter;
+import com.xiaofan.launcher.logs.ErrorReporter;
 import com.xiaofan.launcher.logs.LogArchiver;
 import com.xiaofan.launcher.logs.SystemOutRedirector;
 
@@ -27,6 +29,7 @@ import ch.qos.logback.core.FileAppender;
  *   java -jar Fan-ME-FRP-Launcher.jar -c config.ini    以 FRPC 客户端模式启动（支持 .ini/.toml/.yaml/.yml/.json）
  *   java -jar Fan-ME-FRP-Launcher.jar -t <runId> -p <proxyId>  快捷启动模式（通过 API 获取配置）
  *   java -jar Fan-ME-FRP-Launcher.jar --no-gui          无头模式，仅启动 HTTP API 服务器（适合 Termux/无 JavaFX 环境）
+ *   java -jar Fan-ME-FRP-Launcher.jar --crash           崩溃测试模式，触发炸弹类 oneplusoneisnull 以验证崩溃报告器
  *   java -jar Fan-ME-FRP-Launcher.jar                   以 GUI 模式启动（需要 JavaFX）
  * 
  * 平台支持:
@@ -89,6 +92,7 @@ public class Main {
         // ====== 第五步：解析命令行参数 ======
         boolean noGui = false;
         boolean debugMode = false;
+        boolean crashMode = false;
         if (args.length > 0) {
             String configPath = null;
             String runId = null;
@@ -116,11 +120,27 @@ public class Main {
                 if ("--debug".equals(args[i])) {
                     debugMode = true;
                 }
+                if ("--crash".equals(args[i])) {
+                    crashMode = true;
+                }
             }
 
             // 如果启用了调试模式，设置日志级别为 DEBUG
             if (debugMode) {
                 enableDebugMode();
+            }
+
+            // ====== --crash 模式：触发炸弹类测试崩溃报告器 ======
+            if (crashMode) {
+                log.info("--crash 模式已启用，即将触发炸弹类 oneplusoneisnull 以测试崩溃报告器");
+                log.info("CrashReporter 和 ErrorReporter 已就绪，正在引爆炸弹...");
+                // 初始化 ErrorReporter 实例（确保其类加载完成）
+                ErrorReporter errorReporter = new ErrorReporter(jarDir);
+                // 触发 oneplusoneisnull 的静态初始化，其静态字段 d 会抛出 NullPointerException
+                // 该异常将被 CrashReporter 捕获，生成完整的崩溃报告
+                oneplusoneisnull.errors(args);
+                // 不会执行到这里
+                return;
             }
 
             if (configPath != null) {

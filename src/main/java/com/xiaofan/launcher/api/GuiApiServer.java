@@ -23,8 +23,8 @@ import java.util.concurrent.Executors;
 import java.util.logging.Logger;
 
 import com.xiaofan.launcher.frpc.FrpcManager;
-import com.xiaofan.launcher.logs.DebugCrashException;
-import com.xiaofan.launcher.logs.DebugErrorException;
+import com.xiaofan.launcher.errors.DebugCrashException;
+import com.xiaofan.launcher.errors.DebugErrorException;
 import com.xiaofan.launcher.logs.ErrorReporter;
 
 /**
@@ -231,6 +231,16 @@ public class GuiApiServer {
                 sendJsonResponse(out, 200, response);
             } else if ("POST".equalsIgnoreCase(method) && "/api/passlogin".equals(path)) {
                 String response = handlePassLogin(body);
+                sendJsonResponse(out, 200, response);
+            } else if ("/api/eula".equals(path)) {
+                String response;
+                if ("GET".equalsIgnoreCase(method)) {
+                    response = handleEula();
+                } else if ("POST".equalsIgnoreCase(method)) {
+                    response = handleEulaSet(body);
+                } else {
+                    response = "{\"code\":405,\"message\":\"不支持的请求方法\"}";
+                }
                 sendJsonResponse(out, 200, response);
             } else if ("GET".equalsIgnoreCase(method) && "/debug/crash".equals(path)) {
                 // 仅在调试模式下可用
@@ -1764,6 +1774,63 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handlePassLogin] 密码登录异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"登录失败，请稍后重试\"}";
+        }
+    }
+
+    /**
+     * 处理 GET /api/eula - 获取 EULA 协议状态
+     * 检查 res 目录下是否存在 eula.txt 文件
+     * 如果存在，读取其中的 eula=true 或 eula=false
+     * 返回: {"code":200,"eula":"true"} / {"code":200,"eula":"false"} / {"code":200,"eula":"null"}
+     */
+    private String handleEula() {
+        try {
+            Path eulaFile = resDir.resolve("eula.txt");
+            if (!Files.exists(eulaFile)) {
+                return "{\"code\":200,\"eula\":\"null\"}";
+            }
+
+            String content = new String(Files.readAllBytes(eulaFile), StandardCharsets.UTF_8).trim();
+            // 逐行查找 eula=true 或 eula=false
+            for (String line : content.split("\\n")) {
+                line = line.trim().toLowerCase();
+                if (line.equals("eula=true")) {
+                    return "{\"code\":200,\"eula\":\"true\"}";
+                } else if (line.equals("eula=false")) {
+                    return "{\"code\":200,\"eula\":\"false\"}";
+                }
+            }
+            // 文件存在但没有 eula=true/false 行
+            return "{\"code\":200,\"eula\":\"null\"}";
+        } catch (Exception e) {
+            LOG.warning("[handleEula] 读取 eula.txt 失败: " + e.getMessage());
+            return "{\"code\":200,\"eula\":\"null\"}";
+        }
+    }
+
+    /**
+     * 处理 POST /api/eula - 设置 EULA 协议状态
+     * Body: {"eula":"true"} 或 {"eula":"false"}
+     * 如果 eula.txt 不存在则新建，存在则覆盖写入
+     * 返回: {"code":200,"message":"EULA 已同意"} / {"code":200,"message":"EULA 已拒绝"}
+     */
+    private String handleEulaSet(String body) {
+        try {
+            String eula = extractJsonString(body, "eula");
+            if (eula == null || (!eula.equals("true") && !eula.equals("false"))) {
+                return "{\"code\":400,\"message\":\"eula 参数必须为 true 或 false\"}";
+            }
+
+            Path eulaFile = resDir.resolve("eula.txt");
+            Files.createDirectories(resDir);
+            Files.write(eulaFile, ("eula=" + eula).getBytes(StandardCharsets.UTF_8));
+
+            LOG.info("[handleEulaSet] EULA 已设置为: " + eula);
+            String msg = "true".equals(eula) ? "EULA 已同意" : "EULA 已拒绝";
+            return "{\"code\":200,\"message\":\"" + msg + "\"}";
+        } catch (Exception e) {
+            LOG.warning("[handleEulaSet] 写入 eula.txt 失败: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"写入 EULA 文件失败\"}";
         }
     }
 

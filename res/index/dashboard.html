@@ -2196,6 +2196,72 @@ select.form-input { cursor: pointer; }
     loadProxyList();
     loadNodeList();
     loadServerStatus();
+
+    // ====== EULA 协议检查 ======
+    const checkEula = async () => {
+        try {
+            const res = await fetch('/api/eula');
+            const data = await res.json();
+            if (data.code === 200 && data.eula === "null") {
+                showEulaModal();
+            }
+        } catch (e) {}
+    };
+
+    const showEulaModal = () => {
+        const overlay = document.createElement('div');
+        overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:100000;background:rgba(0,0,0,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;';
+        const modal = document.createElement('div');
+        modal.style.cssText = 'background:var(--bg-base);border:1px solid var(--glass-border);border-radius:28px;width:90%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);transform:scale(0.9);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);overflow:hidden;';
+        modal.innerHTML =
+            '<div style="padding:28px 32px 0;flex-shrink:0;">' +
+                '<div style="font-size:22px;font-weight:700;margin-bottom:4px;">📋 用户协议</div>' +
+                '<div style="font-size:13px;color:var(--text-sec);">Fan-ME-FRP-Launcher 崩溃报告与错误日志收集协议</div>' +
+            '</div>' +
+            '<div style="padding:20px 32px;overflow-y:auto;flex:1;font-size:14px;line-height:1.8;color:var(--text-main);">' +
+                '<h3 style="font-size:16px;margin-bottom:12px;">崩溃报告与错误日志收集协议</h3>' +
+                '<p style="font-size:13px;color:var(--text-sec);margin-bottom:16px;">（最后修订：2026-05-27）</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">1. 收集范围</h4>' +
+                '<p>本软件在运行过程中可能生成以下类型的数据，并仅用于第 2 条所述之目的：</p>' +
+                '<ul style="padding-left:20px;margin:8px 0;">' +
+                    '<li><strong>崩溃报告</strong> — 包含异常堆栈、线程转储、内存使用情况、系统信息等。</li>' +
+                    '<li><strong>错误日志</strong> — 软件运行期间记录的警告、异常、调试信息（不包含 Token 等敏感内容）。</li>' +
+                    '<li><strong>运行环境信息</strong> — 操作系统版本、Java 版本、CPU 核心数等非个人标识信息。</li>' +
+                '</ul>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">2. 用途</h4>' +
+                '<p>上述数据<strong>仅用于</strong>：诊断软件缺陷、修复错误、提升稳定性、优化兼容性。严禁用于广告投放、用户画像、转售等。</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">3. 上传前提</h4>' +
+                '<p><strong>本软件默认不会上传任何数据。</strong>未经用户主动同意，绝不私自上传任何报告或日志。同意状态保存在本地，默认值为"不同意"。</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">4. 数据处理与匿名化</h4>' +
+                '<p>上传前会进行匿名化处理：移除本地用户名、文件路径中的个人标识，不传输密码、Token、隧道配置内容。</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">5. 第三方共享限制</h4>' +
+                '<p>开发者不会将原始崩溃报告出售或分享给任何无关第三方。</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">6. 儿童隐私</h4>' +
+                '<p>若您所在司法管辖区要求未成年人须取得监护人同意，您须确保监护人已阅读并同意本条款。</p>' +
+                '<h4 style="font-size:14px;margin:16px 0 8px;">7. 协议接受</h4>' +
+                '<p><strong>当您点击「我同意」按钮时，即表示您已阅读、理解并接受本协议的全部条款。</strong></p>' +
+            '</div>' +
+            '<div style="padding:20px 32px 28px;display:flex;gap:12px;justify-content:flex-end;flex-shrink:0;border-top:1px solid var(--glass-border);">' +
+                '<button class="eula-reject" style="padding:12px 28px;border-radius:14px;border:1px solid var(--glass-border);background:transparent;color:var(--text-sec);font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;">拒绝</button>' +
+                '<button class="eula-accept" style="padding:12px 28px;border-radius:14px;border:none;background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;">我同意</button>' +
+            '</div>';
+        overlay.appendChild(modal);
+        document.body.appendChild(overlay);
+        requestAnimationFrame(() => {
+            modal.style.transform = 'scale(1)';
+            modal.style.opacity = '1';
+        });
+        modal.querySelector('.eula-reject').addEventListener('click', async () => {
+            try { await fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'false' }) }); } catch (e) {}
+            overlay.remove();
+        });
+        modal.querySelector('.eula-accept').addEventListener('click', async () => {
+            try { await fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'true' }) }); } catch (e) {}
+            overlay.remove();
+        });
+    };
+
+    setTimeout(checkEula, 1000);
 </script>
 
 
