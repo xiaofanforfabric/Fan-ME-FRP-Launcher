@@ -93,70 +93,65 @@ public class Main {
         boolean noGui = false;
         boolean debugMode = false;
         boolean crashMode = false;
-        if (args.length > 0) {
-            String configPath = null;
-            String runId = null;
-            int proxyId = -1;
+        String configPath = null;
+        String runId = null;
+        int proxyId = -1;
 
-            for (int i = 0; i < args.length; i++) {
-                if ("-c".equals(args[i]) && i + 1 < args.length) {
-                    configPath = args[i + 1];
-                    break;
-                }
-                if ("-t".equals(args[i]) && i + 1 < args.length) {
-                    runId = args[i + 1];
-                }
-                if ("-p".equals(args[i]) && i + 1 < args.length) {
-                    try {
-                        proxyId = Integer.parseInt(args[i + 1]);
-                    } catch (NumberFormatException e) {
-                        log.error("-p 参数必须是数字");
-                        System.exit(1);
-                    }
-                }
-                if ("--no-gui".equals(args[i])) {
-                    noGui = true;
-                }
-                if ("--debug".equals(args[i])) {
-                    debugMode = true;
-                }
-                if ("--crash".equals(args[i])) {
-                    crashMode = true;
+        for (int i = 0; i < args.length; i++) {
+            if ("-c".equals(args[i]) && i + 1 < args.length) {
+                configPath = args[i + 1];
+                break;
+            }
+            if ("-t".equals(args[i]) && i + 1 < args.length) {
+                runId = args[i + 1];
+            }
+            if ("-p".equals(args[i]) && i + 1 < args.length) {
+                try {
+                    proxyId = Integer.parseInt(args[i + 1]);
+                } catch (NumberFormatException e) {
+                    log.error("-p 参数必须是数字");
+                    System.exit(1);
                 }
             }
-
-            // 如果启用了调试模式，设置日志级别为 DEBUG
-            if (debugMode) {
-                enableDebugMode();
+            if ("--no-gui".equals(args[i])) {
+                noGui = true;
             }
-
-            // ====== --crash 模式：触发炸弹类测试崩溃报告器 ======
-            if (crashMode) {
-                log.info("--crash 模式已启用，即将触发炸弹类 oneplusoneisnull 以测试崩溃报告器");
-                log.info("CrashReporter 和 ErrorReporter 已就绪，正在引爆炸弹...");
-                // 初始化 ErrorReporter 实例（确保其类加载完成）
-                ErrorReporter errorReporter = new ErrorReporter(jarDir);
-                // 触发 oneplusoneisnull 的静态初始化，其静态字段 d 会抛出 NullPointerException
-                // 该异常将被 CrashReporter 捕获，生成完整的崩溃报告
-                oneplusoneisnull.errors(args);
-                // 不会执行到这里
-                return;
+            if ("--debug".equals(args[i])) {
+                debugMode = true;
             }
-
-            if (configPath != null) {
-                runFrpcClient(configPath);
-                return;
+            if ("--crash".equals(args[i])) {
+                crashMode = true;
             }
+        }
 
-            if (runId != null && proxyId > 0) {
-                runEasyStartup(runId, proxyId);
-                return;
-            }
+        // 如果启用了调试模式，设置日志级别为 DEBUG
+        if (debugMode) {
+            enableDebugMode();
+        }
 
-            if (runId != null || proxyId > 0) {
-                log.error("快捷启动需要同时指定 -t <runId> 和 -p <proxyId>");
-                System.exit(1);
-            }
+        // ====== --crash 模式：触发炸弹类测试崩溃报告器 ======
+        if (crashMode) {
+            log.info("--crash 模式已启用，即将触发炸弹类 oneplusoneisnull 以测试崩溃报告器");
+            log.info("CrashReporter 和 ErrorReporter 已就绪，正在引爆炸弹...");
+            ErrorReporter errorReporter = new ErrorReporter(jarDir);
+            oneplusoneisnull.errors(args);
+            return;
+        }
+
+        // ====== 第六步：根据参数启动对应模式 ======
+        if (configPath != null) {
+            runFrpcClient(configPath);
+            return;
+        }
+
+        if (runId != null && proxyId > 0) {
+            runEasyStartup(runId, proxyId);
+            return;
+        }
+
+        if (runId != null || proxyId > 0) {
+            log.error("快捷启动需要同时指定 -t <runId> 和 -p <proxyId>");
+            System.exit(1);
         }
 
         if (noGui) {
