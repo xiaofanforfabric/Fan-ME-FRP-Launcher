@@ -103,3 +103,13 @@ implementation/genshin-impact-wish-simulator/
 ##QQbot项目，有隐私数据上传不了！##
 qqbot/
 ##QQbot项目，有隐私数据上传不了！##
+
+# IDE
+.idea/
+
+# Generated / runtime
+logs/
+res/eula.txt
+
+# Binary dependencies
+app_services/
