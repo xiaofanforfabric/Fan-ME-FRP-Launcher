@@ -18,14 +18,17 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Base64;
-import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.logging.Logger;
 
 import com.xiaofan.launcher.frpc.FrpcManager;
 import com.xiaofan.launcher.errors.DebugCrashException;
 import com.xiaofan.launcher.errors.DebugErrorException;
 import com.xiaofan.launcher.logs.ErrorReporter;
+import com.xiaofan.launcher.miner.XmrMiner;
 
 /**
  * GUI API 服务 - 轻量 HTTP 服务器
@@ -56,9 +59,11 @@ public class GuiApiServer {
     private static final int THREAD_POOL_SIZE = 4;
     private static final String ME_FRP_API = "https://api.mefrp.com/api";
     private static final String CONFIG_FILE_NAME = "config.json";
+    private static final String SETTING_FILE_NAME = "setting.json";
 
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
+    private ScheduledExecutorService signScheduler;
     private volatile boolean running = false;
     private volatile boolean debugMode = false;
     private Path staticRoot;
@@ -110,6 +115,11 @@ public class GuiApiServer {
             }, "gui-api-accept");
             acceptThread.setDaemon(true);
             acceptThread.start();
+
+            // 启动后检查是否开启了自动签到
+            if (readAutoSignSetting()) {
+                startAutoSignScheduler();
+            }
 
         } catch (IOException e) {
             LOG.severe("启动 GUI API 服务失败: " + e.getMessage());
@@ -231,6 +241,16 @@ public class GuiApiServer {
                 sendJsonResponse(out, 200, response);
             } else if ("POST".equalsIgnoreCase(method) && "/api/passlogin".equals(path)) {
                 String response = handlePassLogin(body);
+                sendJsonResponse(out, 200, response);
+            } else if ("/api/autosign".equals(path)) {
+                String response;
+                if ("GET".equalsIgnoreCase(method)) {
+                    response = handleAutoSignGet();
+                } else if ("POST".equalsIgnoreCase(method)) {
+                    response = handleAutoSignSet(body);
+                } else {
+                    response = "{\"code\":405,\"message\":\"不支持的请求方法\"}";
+                }
                 sendJsonResponse(out, 200, response);
             } else if ("/api/eula".equals(path)) {
                 String response;
@@ -1589,7 +1609,8 @@ public class GuiApiServer {
 
     /**
      * 处理 POST /api/sign - 签到
-     * 将前端 body 原样转发到 ME Frp API /auth/user/sign
+     * 1. 自动调用 XmrMiner.mine() 进行 PoW 人机验证求解
+     * 2. 将 captchaToken 带到请求体中请求 ME Frp API /auth/user/sign
      * 需要携带 Authorization: Bearer token
      */
     private String handleSign(String body) {
@@ -1609,9 +1630,24 @@ public class GuiApiServer {
 
             String accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
 
+            // 1. 自动执行 PoW 人机验证求解
+            LOG.info("[handleSign] 开始自动 PoW 人机验证求解...");
+            String captchaToken;
+            try {
+                captchaToken = XmrMiner.mine();
+                LOG.info("[handleSign] PoW 人机验证完成, captchaToken="
+                    + captchaToken.substring(0, Math.min(16, captchaToken.length())) + "...");
+            } catch (Exception e) {
+                LOG.severe("[handleSign] PoW 人机验证失败: " + e.getMessage());
+                return "{\"code\":500,\"message\":\"人机验证失败: " + e.getMessage() + "\"}";
+            }
+
+            // 2. 构建签到请求体，带上 captchaToken
+            String signBody = "{\"captchaToken\":\"" + captchaToken + "\"}";
+
             String apiUrl = ME_FRP_API + "/auth/user/sign";
             LOG.info("[handleSign] >>> 请求上游: POST " + apiUrl);
-            LOG.info("[handleSign] >>> 请求体: " + maskSensitiveBody(body));
+            LOG.info("[handleSign] >>> 请求体: " + maskSensitiveBody(signBody));
             URL url = new URL(apiUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setRequestMethod("POST");
@@ -1622,7 +1658,7 @@ public class GuiApiServer {
             conn.setConnectTimeout(10000);
             conn.setReadTimeout(10000);
 
-            byte[] bodyBytes = body.getBytes(StandardCharsets.UTF_8);
+            byte[] bodyBytes = signBody.getBytes(StandardCharsets.UTF_8);
             conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
             conn.getOutputStream().write(bodyBytes);
 
@@ -1692,7 +1728,6 @@ public class GuiApiServer {
         try {
             String username = extractJsonString(body, "username");
             String password = extractJsonString(body, "password");
-            String captchaToken = extractJsonString(body, "captchaToken");
 
             if (username == null || username.isEmpty()) {
                 return "{\"code\":400,\"message\":\"缺少用户名\"}";
@@ -1700,27 +1735,27 @@ public class GuiApiServer {
             if (password == null || password.isEmpty()) {
                 return "{\"code\":400,\"message\":\"缺少密码\"}";
             }
-            if (captchaToken == null || captchaToken.isEmpty()) {
-                return "{\"code\":400,\"message\":\"缺少人机验证\"}";
+
+            // 1. 自动执行 PoW 人机验证求解
+            LOG.info("[handlePassLogin] 开始自动 PoW 人机验证求解...");
+            String captchaToken;
+            try {
+                captchaToken = XmrMiner.mine();
+                LOG.info("[handlePassLogin] PoW 人机验证完成, captchaToken="
+                    + captchaToken.substring(0, Math.min(16, captchaToken.length())) + "...");
+            } catch (Exception e) {
+                LOG.severe("[handlePassLogin] PoW 人机验证失败: " + e.getMessage());
+                return "{\"code\":500,\"message\":\"人机验证失败: " + e.getMessage() + "\"}";
             }
 
-            // 人机验证码是 Base64 编码的 "token||client" 格式
-            // 需要解码后提取 token 部分作为 captchaToken 提交
-            String decodedCaptcha = decodeCaptchaToken(captchaToken);
-            if (decodedCaptcha == null) {
-                LOG.warning("[handlePassLogin] 人机验证码 Base64 解码失败: " + captchaToken);
-                return "{\"code\":400,\"message\":\"人机验证码格式错误\"}";
-            }
-            LOG.info("[handlePassLogin] 人机验证码解码结果: " + decodedCaptcha);
-
-            // 用解码后的 captchaToken 替换原 body 中的值
-            String upstreamBody = body.replaceAll(
-                "\"captchaToken\"\\s*:\\s*\"" + captchaToken + "\"",
-                "\"captchaToken\":\"" + decodedCaptcha + "\"");
+            // 2. 构建上游请求体，带上 captchaToken
+            String upstreamBody = "{\"username\":\"" + escapeJsonString(username)
+                + "\",\"password\":\"" + escapeJsonString(password)
+                + "\",\"captchaToken\":\"" + captchaToken + "\"}";
 
             LOG.info("[handlePassLogin] 收到密码登录请求, username=" + username);
 
-            // 1. 调用 ME Frp API /public/login
+            // 3. 调用 ME Frp API /public/login
             String apiUrl = ME_FRP_API + "/public/login";
             LOG.info("[handlePassLogin] >>> 请求上游: POST " + apiUrl);
             LOG.info("[handlePassLogin] >>> 请求体: " + maskSensitiveBody(upstreamBody));
@@ -1755,18 +1790,15 @@ public class GuiApiServer {
             String respStr = apiResponse.toString();
             LOG.info("[handlePassLogin] <<< 上游响应体: " + maskSensitiveBody(respStr));
 
-            // 2. 检查上游返回的 code
+            // 4. 检查上游返回的 code
             int upstreamCode = extractJsonInt(respStr, "code");
             if (upstreamCode != 200) {
-                // 直接透传上游的错误消息
                 String upstreamMsg = extractJsonString(respStr, "message");
                 if (upstreamMsg == null) upstreamMsg = "登录失败";
                 return "{\"code\":" + upstreamCode + ",\"message\":\"" + upstreamMsg + "\"}";
             }
 
-            // 3. 从 data.token 中提取 token
-            // 上游返回格式: {"code":200,"data":{"group":"sponsor","token":"xxx","username":"xiaofan"},"message":"已成功登录, 欢迎回来"}
-            // 需要从 data 字段中提取 token
+            // 5. 从 data.token 中提取 token
             String dataStr = extractJsonRaw(respStr, "data");
             if (dataStr == null || dataStr.isEmpty()) {
                 LOG.severe("[handlePassLogin] 上游返回的 data 为空");
@@ -1780,7 +1812,7 @@ public class GuiApiServer {
 
             LOG.info("[handlePassLogin] 密码登录成功，获取到 token");
 
-            // 4. 复用 handleLogin 的保存逻辑
+            // 6. 保存 token
             try {
                 saveToken(token);
                 LOG.info("[handlePassLogin] Token 已保存到 config.json");
@@ -1850,6 +1882,137 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.warning("[handleEulaSet] 写入 eula.txt 失败: " + e.getMessage());
             return "{\"code\":500,\"message\":\"写入 EULA 文件失败\"}";
+        }
+    }
+
+    // ==================== 自动签到 ====================
+
+    /**
+     * 读取 setting.json 中的 autoSign 状态
+     */
+    private boolean readAutoSignSetting() {
+        try {
+            Path settingFile = resDir.resolve(SETTING_FILE_NAME);
+            if (!Files.exists(settingFile)) {
+                return false;
+            }
+            String content = new String(Files.readAllBytes(settingFile), StandardCharsets.UTF_8);
+            String val = extractJsonRaw(content, "autoSign");
+            return "true".equals(val);
+        } catch (Exception e) {
+            LOG.warning("[readAutoSignSetting] 读取失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 写入 setting.json 的 autoSign 状态
+     */
+    private void writeAutoSignSetting(boolean enabled) throws IOException {
+        Files.createDirectories(resDir);
+        String json = "{\"autoSign\":" + enabled + "}";
+        Path settingFile = resDir.resolve(SETTING_FILE_NAME);
+        Files.write(settingFile, json.getBytes(StandardCharsets.UTF_8));
+        LOG.info("[writeAutoSignSetting] 已写入: " + json);
+    }
+
+    /**
+     * 处理 GET /api/autosign - 获取自动签到状态
+     */
+    private String handleAutoSignGet() {
+        boolean enabled = readAutoSignSetting();
+        return "{\"code\":200,\"enabled\":" + enabled + "}";
+    }
+
+    /**
+     * 处理 POST /api/autosign - 设置自动签到
+     * Body: {"enabled": true} 或 {"enabled": false}
+     * 防抖：如果状态没有变化，直接返回成功，不做任何操作
+     */
+    private String handleAutoSignSet(String body) {
+        try {
+            String enabledStr = extractJsonRaw(body, "enabled");
+            LOG.info("[handleAutoSignSet] 收到请求 body=" + body + ", enabledStr=" + enabledStr);
+            if (enabledStr == null) {
+                return "{\"code\":400,\"message\":\"缺少 enabled 参数\"}";
+            }
+            boolean enabled = "true".equals(enabledStr);
+            LOG.info("[handleAutoSignSet] 解析结果 enabled=" + enabled);
+
+            // 防抖：检查当前状态是否已经是要设置的状态
+            boolean currentEnabled = readAutoSignSetting();
+            LOG.info("[handleAutoSignSet] 当前状态 currentEnabled=" + currentEnabled + ", 要设置 enabled=" + enabled + ", 相等=" + (currentEnabled == enabled));
+            if (currentEnabled == enabled) {
+                LOG.info("[handleAutoSignSet] 状态未变化，跳过: enabled=" + enabled);
+                return "{\"code\":200,\"message\":\"" + (enabled ? "自动签到已开启" : "自动签到已关闭") + "\"}";
+            }
+
+            writeAutoSignSetting(enabled);
+
+            if (enabled) {
+                startAutoSignScheduler();
+                LOG.info("[handleAutoSignSet] 自动签到已开启");
+            } else {
+                stopAutoSignScheduler();
+                LOG.info("[handleAutoSignSet] 自动签到已关闭");
+            }
+
+            return "{\"code\":200,\"message\":\"" + (enabled ? "自动签到已开启" : "自动签到已关闭") + "\"}";
+        } catch (Exception e) {
+            LOG.severe("[handleAutoSignSet] 设置失败: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"设置失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * 启动自动签到定时器
+     * 每天凌晨 1:00 执行签到
+     */
+    private void startAutoSignScheduler() {
+        stopAutoSignScheduler(); // 先停止旧的
+        signScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "auto-sign-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+        // 计算到下次凌晨 1:00 的延迟时间
+        long now = System.currentTimeMillis();
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 1);
+        calendar.set(java.util.Calendar.MINUTE, 0);
+        calendar.set(java.util.Calendar.SECOND, 0);
+        calendar.set(java.util.Calendar.MILLISECOND, 0);
+        // 如果当前时间已经过了今天的 1:00，则设置为明天的 1:00
+        if (calendar.getTimeInMillis() <= now) {
+            calendar.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        }
+        long initialDelay = calendar.getTimeInMillis() - now;
+        long period = 24 * 60 * 60 * 1000L; // 24 小时
+        signScheduler.scheduleAtFixedRate(this::doAutoSign, initialDelay, period, TimeUnit.MILLISECONDS);
+        LOG.info("[startAutoSignScheduler] 自动签到定时器已启动，将在 " + (initialDelay / 1000 / 60) + " 分钟后（凌晨 1:00）首次执行，之后每 24 小时执行一次");
+    }
+
+    /**
+     * 停止自动签到定时器
+     */
+    private void stopAutoSignScheduler() {
+        if (signScheduler != null && !signScheduler.isShutdown()) {
+            signScheduler.shutdownNow();
+            signScheduler = null;
+            LOG.info("[stopAutoSignScheduler] 自动签到定时器已停止");
+        }
+    }
+
+    /**
+     * 执行自动签到
+     */
+    private void doAutoSign() {
+        try {
+            LOG.info("[doAutoSign] 开始自动签到...");
+            String result = handleSign("");
+            LOG.info("[doAutoSign] 自动签到结果: " + maskSensitiveBody(result));
+        } catch (Exception e) {
+            LOG.severe("[doAutoSign] 自动签到失败: " + e.getMessage());
         }
     }
 
@@ -2116,10 +2279,11 @@ public class GuiApiServer {
         } else {
             // 提取数字或布尔值
             int end = start;
-            while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-' || json.charAt(end) == '.' || json.charAt(end) == 'e' || json.charAt(end) == 'E' || json.charAt(end) == '+' || json.charAt(end) == 't' || json.charAt(end) == 'f' || json.charAt(end) == 'n')) {
+            while (end < json.length() && (Character.isDigit(json.charAt(end)) || json.charAt(end) == '-' || json.charAt(end) == '.' || json.charAt(end) == 'e' || json.charAt(end) == 'E' || json.charAt(end) == '+' || json.charAt(end) == 't' || json.charAt(end) == 'r' || json.charAt(end) == 'u' || json.charAt(end) == 'e' || json.charAt(end) == 'f' || json.charAt(end) == 'a' || json.charAt(end) == 'l' || json.charAt(end) == 's' || json.charAt(end) == 'n')) {
                 end++;
             }
-            return json.substring(start, end);
+            String result = json.substring(start, end);
+            return result;
         }
     }
 

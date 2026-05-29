@@ -149,6 +149,14 @@ input { user-select: auto; -webkit-user-select: auto; }
 .logout-btn { width: 100%; padding: 16px; border-radius: 16px; border: none; background: rgba(255, 59, 48, 0.12); color: #ff3b30; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; margin-top: 24px; }
 .logout-btn:hover { background: rgba(255, 59, 48, 0.2); }
 
+/* 开关样式 */
+.toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; flex-shrink: 0; }
+.toggle-switch input { opacity: 0; width: 0; height: 0; }
+.toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(120,120,128,0.2); border-radius: 28px; transition: all 0.3s ease; }
+.toggle-slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
+.toggle-switch input:checked + .toggle-slider { background: var(--primary); }
+.toggle-switch input:checked + .toggle-slider::before { transform: translateX(24px); }
+
 .fh5-shockwave { position: fixed; border-radius: 50%; transform: translate(-50%, -50%) scale(0); pointer-events: none; z-index: 9999; opacity: 0.9; backdrop-filter: blur(40px); -webkit-backdrop-filter: blur(40px); transition: transform 0.8s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.8s ease-out; }
 
 /* 隧道列表表格 */
@@ -654,6 +662,16 @@ select.form-input { cursor: pointer; }
                             <div class="settings-label">当前用户</div>
                             <div class="settings-desc" id="currentUser">-</div>
                         </div>
+                    </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-label">自动签到</div>
+                            <div class="settings-desc">每天自动执行签到</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoSignToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
                     </div>
                     <button class="logout-btn" id="logoutBtn">退出登录</button>
                 </div>
@@ -2025,171 +2043,108 @@ select.form-input { cursor: pointer; }
         });
     }
 
-    // ====== 签到功能（人机验证弹窗） ======
-    function showSignModal() {
+    // ====== 签到功能（自动 PoW 求解） ======
+    async function doSign() {
         const btn = document.getElementById('signBtn');
         if (btn.disabled) return;
 
-        // 移除旧弹窗
-        const old = document.querySelector('.sign-modal');
-        if (old) old.remove();
+        // 禁用按钮，显示进度
+        btn.disabled = true;
+        btn.textContent = '⏳ 人机验证中...';
+        btn.style.background = 'rgba(255,149,0,0.3)';
+        btn.style.color = '#ff9500';
 
-        const modal = document.createElement('div');
-        modal.className = 'sign-modal';
-        modal.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:100000;display:flex;align-items:center;justify-content:center;';
+        try {
+            // 直接调用签到 API，后端会自动执行 PoW 求解
+            const resp = await fetch('/api/sign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({})
+            });
+            const data = await resp.json();
 
-        modal.innerHTML =
-            '<div class="sign-overlay" style="position:absolute;top:0;left:0;width:100%;height:100%;background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);"></div>' +
-            '<div class="sign-card" style="position:relative;background:var(--bg-base);border:1px solid var(--glass-border);box-shadow:0 20px 60px rgba(0,0,0,0.5);border-radius:28px;width:90%;max-width:520px;display:flex;flex-direction:column;transform:scale(0.85) translateY(20px);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);">' +
-                '<div style="display:flex;align-items:center;justify-content:space-between;padding:24px 28px 0;flex-shrink:0;">' +
-                    '<div style="font-size:20px;font-weight:700;">✅ 人机验证</div>' +
-                    '<button class="sign-close-btn" style="background:rgba(120,120,128,0.1);border:none;color:var(--text-sec);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">' +
-                        '<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>' +
-                    '</button>' +
-                '</div>' +
-                '<div style="padding:16px 28px 0;font-size:14px;color:var(--text-sec);">请点击下方按钮，在系统浏览器中完成人机验证，然后将验证码复制回来粘贴</div>' +
-                '<div style="margin:16px 28px 0;display:flex;flex-direction:column;align-items:center;gap:16px;padding:40px 0;border:1px dashed var(--glass-border);border-radius:16px;">' +
-                    '<div style="font-size:48px;">🌐</div>' +
-                    '<div style="font-size:15px;color:var(--text-sec);text-align:center;line-height:1.6;">点击下方按钮在系统浏览器中打开验证页面<br>完成验证后复制验证码回来粘贴</div>' +
-                    '<button class="sign-open-browser-btn" id="signOpenBrowserBtn" style="padding:14px 32px;border-radius:14px;border:none;background:var(--primary);color:#fff;font-size:16px;font-weight:600;cursor:pointer;transition:all 0.2s;">打开浏览器验证</button>' +
-                '</div>' +
-                '<div style="padding:16px 28px 24px;display:flex;flex-direction:column;gap:12px;">' +
-                    '<div style="display:flex;gap:10px;">' +
-                        '<input class="sign-token-input" id="signCaptchaInput" style="flex:1;background:rgba(120,120,128,0.08);border:1px solid var(--glass-border);border-radius:12px;padding:12px 16px;font-size:15px;color:var(--text-main);outline:none;user-select:auto;-webkit-user-select:auto;" placeholder="粘贴验证码..." />' +
-                        '<button class="sign-confirm-btn" id="signConfirmBtn" style="padding:12px 24px;border-radius:12px;border:none;background:var(--primary);color:#fff;font-size:15px;font-weight:600;cursor:pointer;transition:all 0.2s;white-space:nowrap;">确认签到</button>' +
-                    '</div>' +
-                    '<div id="signModalResult" style="font-size:14px;color:var(--text-sec);"></div>' +
-                '</div>' +
-            '</div>';
-
-        document.body.appendChild(modal);
-
-        // 入场动画
-        requestAnimationFrame(() => {
-            modal.querySelector('.sign-card').style.transform = 'scale(1) translateY(0)';
-            modal.querySelector('.sign-card').style.opacity = '1';
-        });
-
-        // 关闭
-        const closeModal = () => modal.remove();
-        modal.querySelector('.sign-close-btn').addEventListener('click', closeModal);
-        modal.querySelector('.sign-overlay').addEventListener('click', closeModal);
-
-        // 打开浏览器验证
-        modal.querySelector('#signOpenBrowserBtn').addEventListener('click', async () => {
-            const btn = modal.querySelector('#signOpenBrowserBtn');
-            btn.disabled = true;
-            btn.textContent = '正在打开...';
-            try {
-                const resp = await fetch('/api/openurl', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ url: 'https://www.mefrp.com/3rdparty/captcha?client=Fan-ME-FRP-Launcher' })
-                });
-                const data = await resp.json();
-                if (data.code === 200) {
-                    btn.textContent = '✅ 已打开浏览器';
-                    btn.style.background = 'rgba(52,199,89,0.2)';
-                    btn.style.color = '#34c759';
-                } else {
-                    btn.textContent = '❌ ' + (data.message || '打开失败');
-                    btn.style.background = 'rgba(255,59,48,0.2)';
-                    btn.style.color = '#ff3b30';
-                    setTimeout(() => {
-                        btn.disabled = false;
-                        btn.textContent = '打开浏览器验证';
-                        btn.style.background = 'var(--primary)';
-                        btn.style.color = '#fff';
-                    }, 2000);
-                }
-            } catch (e) {
-                btn.textContent = '❌ 请求失败';
+            if (data.code === 200) {
+                btn.textContent = '✅ 已签到';
+                btn.style.background = 'rgba(52,199,89,0.2)';
+                btn.style.color = '#34c759';
+                btn.style.cursor = 'not-allowed';
+                document.getElementById('infoSigned').textContent = '已签到';
+            } else {
+                btn.textContent = '❌ ' + (data.message || '签到失败');
                 btn.style.background = 'rgba(255,59,48,0.2)';
                 btn.style.color = '#ff3b30';
+                // 3 秒后恢复
                 setTimeout(() => {
                     btn.disabled = false;
-                    btn.textContent = '打开浏览器验证';
+                    btn.textContent = '签到';
                     btn.style.background = 'var(--primary)';
                     btn.style.color = '#fff';
-                }, 2000);
+                    btn.style.cursor = 'pointer';
+                }, 3000);
             }
-        });
-
-        // 确认签到
-        modal.querySelector('#signConfirmBtn').addEventListener('click', async () => {
-            const input = modal.querySelector('#signCaptchaInput');
-            const resultEl = modal.querySelector('#signModalResult');
-            const raw = input.value.trim();
-            if (!raw) {
-                resultEl.textContent = '请先粘贴验证码';
-                resultEl.style.color = '#ff3b30';
-                return;
-            }
-
-            // Base64 解码得到 token||client 格式
-            let decoded;
-            try {
-                decoded = atob(raw);
-            } catch (e) {
-                resultEl.textContent = '验证码格式错误，无法解码';
-                resultEl.style.color = '#ff3b30';
-                return;
-            }
-
-            // 提取 token（格式: token||client）
-            const parts = decoded.split('||');
-            const captchaToken = parts[0];
-            if (!captchaToken) {
-                resultEl.textContent = '验证码格式错误，未找到 token';
-                resultEl.style.color = '#ff3b30';
-                return;
-            }
-
-            // 调用签到接口
-            const confirmBtn = modal.querySelector('#signConfirmBtn');
-            confirmBtn.disabled = true;
-            confirmBtn.textContent = '签到中...';
-            resultEl.textContent = '';
-
-            try {
-                const resp = await fetch('/api/sign', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ captchaToken: captchaToken })
-                });
-                const data = await resp.json();
-                if (data.code === 200) {
-                    resultEl.textContent = '✅ ' + (data.message || '签到成功！');
-                    resultEl.style.color = '#34c759';
-                    // 更新按钮状态
-                    const signBtn = document.getElementById('signBtn');
-                    signBtn.disabled = true;
-                    signBtn.style.background = 'rgba(120,120,128,0.2)';
-                    signBtn.style.color = 'var(--text-sec)';
-                    signBtn.style.cursor = 'not-allowed';
-                    signBtn.textContent = '已签到';
-                    document.getElementById('infoSigned').textContent = '已签到';
-                    setTimeout(closeModal, 1500);
-                } else {
-                    resultEl.textContent = '❌ ' + (data.message || '签到失败');
-                    resultEl.style.color = '#ff3b30';
-                    confirmBtn.disabled = false;
-                    confirmBtn.textContent = '确认签到';
-                }
-            } catch (e) {
-                resultEl.textContent = '❌ 签到请求失败: ' + e.message;
-                resultEl.style.color = '#ff3b30';
-                confirmBtn.disabled = false;
-                confirmBtn.textContent = '确认签到';
-            }
-        });
+        } catch (e) {
+            btn.textContent = '❌ 请求失败';
+            btn.style.background = 'rgba(255,59,48,0.2)';
+            btn.style.color = '#ff3b30';
+            setTimeout(() => {
+                btn.disabled = false;
+                btn.textContent = '签到';
+                btn.style.background = 'var(--primary)';
+                btn.style.color = '#fff';
+                btn.style.cursor = 'pointer';
+            }, 3000);
+        }
     }
 
-    // 签到按钮点击 -> 弹出人机验证弹窗
-    async function doSign() {
-        showSignModal();
-    }
 
+    // ====== 自动签到开关 ======
+    const autoSignToggle = document.getElementById('autoSignToggle');
+    const autoSignSlider = document.querySelector('#autoSignToggle + .toggle-slider');
+
+    // 切换自动签到的事件处理函数
+    let autoSignChanging = false;
+    autoSignToggle.addEventListener('change', async function() {
+        if (autoSignChanging) return;
+        autoSignChanging = true;
+        const enabled = this.checked;
+        console.log('[autoSign] change 事件触发, this.checked=' + this.checked + ', enabled=' + enabled);
+        try {
+            const resp = await fetch('/api/autosign', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ enabled: enabled })
+            });
+            const data = await resp.json();
+            console.log('[autoSign] 后端返回:', data);
+            if (data.code === 200) {
+                showToast(data.message, enabled ? 'success' : 'info');
+            } else {
+                showToast(data.message || '操作失败', 'error');
+                this.checked = !enabled; // 恢复状态
+            }
+        } catch (e) {
+            console.error('[autoSign] 请求失败:', e);
+            showToast('请求失败: ' + e.message, 'error');
+            this.checked = !enabled; // 恢复状态
+        }
+        autoSignChanging = false;
+    });
+
+    // 加载自动签到状态（先移除事件监听避免误触发）
+    async function loadAutoSignStatus() {
+        try {
+            const resp = await fetch('/api/autosign');
+            const data = await resp.json();
+            if (data.code === 200) {
+                autoSignChanging = true;
+                autoSignToggle.checked = data.enabled === true;
+                autoSignChanging = false;
+            }
+        } catch (e) {
+            console.error('加载自动签到状态失败:', e);
+        }
+    }
+    loadAutoSignStatus();
 
     // 加载数据
     loadUserData();
