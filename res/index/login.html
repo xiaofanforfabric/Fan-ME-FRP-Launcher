@@ -339,10 +339,6 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
                 <div class="input-wrapper">
                     <input type="password" class="input-field" id="passPassword" required autocomplete="current-password" placeholder="密码">
                 </div>
-                <div class="input-wrapper captcha-wrapper">
-                    <input type="text" class="input-field" id="passCaptcha" required autocomplete="off" placeholder="人机验证码">
-                    <button type="button" class="captcha-btn" id="captchaBtn">获取验证码</button>
-                </div>
                 <button type="submit" class="submit-btn" id="passSubmitBtn">
                     <span class="btn-text">密码登录</span>
                 </button>
@@ -682,35 +678,12 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
     const passForm = document.getElementById('passForm');
     const passUsername = document.getElementById('passUsername');
     const passPassword = document.getElementById('passPassword');
-    const passCaptcha = document.getElementById('passCaptcha');
     const passSubmitBtn = document.getElementById('passSubmitBtn');
-    const captchaBtn = document.getElementById('captchaBtn');
     const passBtnText = passSubmitBtn.querySelector('.btn-text');
-
-    // 获取验证码按钮
-    captchaBtn.addEventListener('click', () => {
-        const url = 'https://www.mefrp.com/3rdparty/captcha?client=Fan-ME-FRP-Launcher';
-        fetch('/api/openurl', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ url: url })
-        })
-        .then(res => res.json())
-        .then(data => {
-            if (data.code !== 200) {
-                showMsg(data.message || 'OMG BRO 没浏览器我也无能为力啊');
-            } else {
-                showMsg('已打开浏览器，请完成人机验证后复制验证码', false);
-            }
-        })
-        .catch(() => {
-            showMsg('OMG BRO 没浏览器我也无能为力啊');
-        });
-    });
 
     const setPassLoading = (loading) => {
         if (loading) {
-            passBtnText.textContent = '登录中...';
+            passBtnText.textContent = '人机验证中...';
             passSubmitBtn.disabled = true;
             passSubmitBtn.style.opacity = '0.7';
         } else {
@@ -724,7 +697,6 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
         e.preventDefault();
         const username = passUsername.value.trim();
         const password = passPassword.value.trim();
-        const captcha = passCaptcha.value.trim();
 
         if (!username) {
             showMsg('请输入用户名');
@@ -732,10 +704,6 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
         }
         if (!password) {
             showMsg('请输入密码');
-            return;
-        }
-        if (!captcha) {
-            showMsg('请获取并输入人机验证码');
             return;
         }
 
@@ -748,8 +716,7 @@ input { user-select: auto; -webkit-user-select: auto; -moz-user-select: auto; -m
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     username: username,
-                    password: password,
-                    captchaToken: captcha
+                    password: password
                 })
             });
             const data = await res.json();
