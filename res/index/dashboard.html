@@ -149,8 +149,82 @@ input { user-select: auto; -webkit-user-select: auto; }
 .logout-btn { width: 100%; padding: 16px; border-radius: 16px; border: none; background: rgba(255, 59, 48, 0.12); color: #ff3b30; font-size: 16px; font-weight: 600; cursor: pointer; transition: all 0.3s ease; margin-top: 24px; }
 .logout-btn:hover { background: rgba(255, 59, 48, 0.2); }
 
+/* 抽奖页面样式 - 摇号器 */
+.lottery-card { border-radius: 36px; padding: 40px; background: var(--glass-bg); backdrop-filter: blur(20px) saturate(180%); -webkit-backdrop-filter: blur(20px) saturate(180%); border: 1px solid var(--glass-border); box-shadow: 0 10px 40px var(--glass-shadow); transform: translate3d(calc(var(--mx) * 1.5), calc(var(--my) * 1.5), 0) rotateX(calc(var(--my) * -0.1deg)) rotateY(calc(var(--mx) * 0.1deg)); }
+.lottery-header { text-align: center; margin-bottom: 32px; }
+.lottery-title { font-size: 28px; font-weight: 800; background: linear-gradient(135deg, var(--primary), #ff2d55); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.lottery-subtitle { font-size: 14px; color: var(--text-sec); margin-top: 8px; }
+
+/* 摇号器容器 */
+.shaker-container { display: flex; gap: 24px; margin-bottom: 24px; }
+.shaker-box { flex: 1; background: rgba(120,120,128,0.04); border-radius: 24px; padding: 24px; border: 1px solid var(--glass-border); text-align: center; }
+.shaker-label { font-size: 14px; font-weight: 600; color: var(--text-sec); margin-bottom: 16px; display: flex; align-items: center; justify-content: center; gap: 8px; }
+.shaker-display { font-family: 'Courier New', monospace; letter-spacing: 4px; padding: 16px; border-radius: 16px; background: rgba(0,0,0,0.2); border: 1px solid var(--glass-border); margin-bottom: 12px; min-height: 60px; display: flex; align-items: center; justify-content: center; transition: all 0.3s; }
+.shaker-display.spinning { border-color: var(--primary); box-shadow: 0 0 20px var(--primary-light); }
+.shaker-display .char { display: inline-block; transition: all 0.08s ease; }
+.shaker-display .char.flip { animation: charFlip 0.1s ease; }
+@keyframes charFlip { 0% { transform: translateY(-4px) scale(1.1); opacity: 0.6; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
+.shaker-code { font-size: 28px; font-weight: 700; color: var(--primary); }
+.shaker-num { font-size: 48px; font-weight: 800; background: linear-gradient(135deg, #ff2d55, #ff9500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+
+/* 抽奖结果列表 - 每行显示优惠码 + 流量 */
+.lottery-results { margin-bottom: 24px; min-height: 40px; }
+.lottery-result-header { display: flex; font-size: 12px; font-weight: 600; color: var(--text-sec); padding: 8px 16px; border-bottom: 1px solid var(--glass-border); margin-bottom: 4px; }
+.lottery-result-header .col-code { flex: 1; }
+.lottery-result-header .col-traffic { width: 100px; text-align: right; }
+.lottery-result-row { display: flex; align-items: center; padding: 10px 16px; border-radius: 12px; margin-bottom: 4px; animation: resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); transition: background 0.2s; }
+.lottery-result-row:hover { background: rgba(120,120,128,0.06); }
+@keyframes resultSlideIn { 0% { transform: translateX(-20px) scale(0.95); opacity: 0; } 100% { transform: translateX(0) scale(1); opacity: 1; } }
+.lottery-result-row .row-code { flex: 1; font-family: 'Courier New', monospace; font-size: 14px; font-weight: 600; color: var(--primary); letter-spacing: 1px; }
+.lottery-result-row .row-traffic { width: 100px; text-align: right; font-size: 15px; font-weight: 700; }
+.lottery-result-row .row-traffic.win { color: #34c759; }
+.lottery-result-row .row-traffic.lose { color: var(--text-sec); }
+.lottery-result-row .row-badge { display: inline-block; padding: 2px 8px; border-radius: 8px; font-size: 10px; font-weight: 700; margin-left: 8px; }
+.lottery-result-row .row-badge.coupon { background: rgba(255,149,0,0.15); color: #ff9500; }
+.lottery-result-row .row-badge.traffic { background: rgba(52,199,89,0.15); color: #34c759; }
+.lottery-result-row .row-badge.none { background: rgba(120,120,128,0.1); color: var(--text-sec); }
+
+
+/* 抽奖按钮 */
+.lottery-buttons { display: flex; gap: 16px; justify-content: center; margin-bottom: 24px; }
+.lottery-btn { padding: 16px 40px; border-radius: 20px; border: none; font-size: 18px; font-weight: 700; cursor: pointer; transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1); position: relative; overflow: hidden; }
+.lottery-btn::before { content: ''; position: absolute; top: -50%; left: -50%; width: 200%; height: 200%; background: radial-gradient(circle, rgba(255,255,255,0.15) 0%, transparent 60%); opacity: 0; transition: opacity 0.3s; }
+.lottery-btn:hover::before { opacity: 1; }
+.lottery-btn:hover { transform: translateY(-3px) scale(1.02); }
+.lottery-btn:active { transform: translateY(0) scale(0.98); }
+.lottery-btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none !important; }
+.lottery-btn.single { background: linear-gradient(135deg, var(--primary), #5e5ce6); color: #fff; box-shadow: 0 8px 24px rgba(74, 111, 255, 0.3); }
+.lottery-btn.ten { background: linear-gradient(135deg, #ff2d55, #ff9500); color: #fff; box-shadow: 0 8px 24px rgba(255, 45, 85, 0.3); }
+.lottery-btn .btn-icon { display: inline-block; margin-right: 8px; font-size: 20px; }
+
+/* 概率公示表 */
+.lottery-probability { margin-top: 24px; }
+.probability-title { font-size: 16px; font-weight: 700; margin-bottom: 16px; display: flex; align-items: center; gap: 8px; cursor: pointer; user-select: none; }
+.probability-title .arrow { transition: transform 0.3s; display: inline-block; }
+.probability-title .arrow.open { transform: rotate(90deg); }
+.probability-table { width: 100%; border-collapse: collapse; font-size: 14px; overflow: hidden; border-radius: 16px; }
+.probability-table thead th { text-align: left; padding: 12px 16px; font-weight: 600; color: var(--text-sec); font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; border-bottom: 1px solid var(--glass-border); background: rgba(120,120,128,0.04); }
+.probability-table tbody td { padding: 12px 16px; border-bottom: 1px solid var(--glass-border); }
+.probability-table tbody tr:last-child td { border-bottom: none; }
+.probability-table tbody tr:hover { background: var(--primary-light); }
+.probability-bar { height: 6px; border-radius: 3px; background: rgba(120,120,128,0.1); overflow: hidden; width: 120px; }
+.probability-bar-fill { height: 100%; border-radius: 3px; transition: width 0.6s ease; }
+.probability-bar-fill.legendary { background: linear-gradient(90deg, #ff2d55, #ff9500); }
+.probability-bar-fill.epic { background: linear-gradient(90deg, #af52de, #5e5ce6); }
+.probability-bar-fill.rare { background: linear-gradient(90deg, #007aff, #5ac8fa); }
+.probability-bar-fill.common { background: rgba(120,120,128,0.3); }
+
+/* 抽奖历史 */
+.lottery-history { margin-top: 24px; }
+.history-title { font-size: 14px; font-weight: 600; color: var(--text-sec); margin-bottom: 12px; }
+.history-item { display: flex; align-items: center; gap: 8px; padding: 8px 12px; border-radius: 10px; font-size: 13px; color: var(--text-sec); }
+.history-item:hover { background: rgba(120,120,128,0.06); }
+.history-time { font-size: 11px; color: var(--text-sec); opacity: 0.6; flex-shrink: 0; }
+
+
 /* 开关样式 */
 .toggle-switch { position: relative; display: inline-block; width: 52px; height: 28px; flex-shrink: 0; }
+
 .toggle-switch input { opacity: 0; width: 0; height: 0; }
 .toggle-slider { position: absolute; cursor: pointer; top: 0; left: 0; right: 0; bottom: 0; background: rgba(120,120,128,0.2); border-radius: 28px; transition: all 0.3s ease; }
 .toggle-slider::before { content: ''; position: absolute; width: 22px; height: 22px; left: 3px; bottom: 3px; background: #fff; border-radius: 50%; transition: all 0.3s ease; box-shadow: 0 2px 4px rgba(0,0,0,0.2); }
@@ -344,11 +418,16 @@ select.form-input { cursor: pointer; }
                 <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M4 3h16c.55 0 1 .45 1 1v4c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1V4c0-.55.45-1 1-1zm1 5h14V5H5v3zm-1 4h16c.55 0 1 .45 1 1v4c0 .55-.45 1-1 1H4c-.55 0-1-.45-1-1v-4c0-.55.45-1 1-1zm1 5h14v-3H5v3z"/></svg></div>
                 <span class="nav-text">节点状态</span>
             </a>
+            <a class="nav-item" data-page="lottery">
+                <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M19.3 16.9c.4-.7.7-1.5.7-2.4 0-2.5-2-4.5-4.5-4.5S11 12 11 14.5s2 4.5 4.5 4.5c.9 0 1.7-.3 2.4-.7l3.2 3.2 1.4-1.4-3.2-3.2zm-3.8.1c-1.4 0-2.5-1.1-2.5-2.5s1.1-2.5 2.5-2.5 2.5 1.1 2.5 2.5-1.1 2.5-2.5 2.5zM12 2l-1.5 3.5L7 7l3.5 1.5L12 12l1.5-3.5L17 7l-3.5-1.5L12 2zM3.5 7L5 9.5 7.5 11 5 12.5 3.5 15 2 12.5 0 11l2.5-1.5L3.5 7z"/></svg></div>
+                <span class="nav-text">抽奖</span>
+            </a>
             <a class="nav-item" data-page="settings">
 
                 <div class="icon-wrap"><svg viewBox="0 0 24 24"><path d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.07.61-.07.94 0 .32.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"/></svg></div>
                 <span class="nav-text">设置</span>
             </a>
+
         </div>
 
         <div class="info-group">
@@ -646,8 +725,135 @@ select.form-input { cursor: pointer; }
                 </div>
             </div>
 
+            <!-- 抽奖页面 -->
+            <div class="page-section" id="page-lottery">
+                <div class="lottery-card">
+                    <div class="lottery-header">
+                        <div class="lottery-title">🎰 幸运抽奖</div>
+                        <div class="lottery-subtitle">试试手气，赢取流量包和优惠券！</div>
+                    </div>
+
+                    <!-- 两个摇号器 -->
+                    <div class="shaker-container">
+                        <!-- 优惠码摇号器（19位字母） -->
+                        <div class="shaker-box">
+                            <div class="shaker-label">🎟️ 优惠码</div>
+                            <div class="shaker-display" id="codeDisplay">
+                                <span class="shaker-code" id="codeText">--------------------</span>
+                            </div>
+                        </div>
+                        <!-- 流量摇号器（3位数字） -->
+                        <div class="shaker-box">
+                            <div class="shaker-label">📦 流量包</div>
+                            <div class="shaker-display" id="numDisplay">
+                                <span class="shaker-num" id="numText">000</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="lottery-buttons">
+                        <button class="lottery-btn single" id="lotterySingleBtn" onclick="doLottery(1)">
+                            <span class="btn-icon">🎯</span> 单抽
+                        </button>
+                        <button class="lottery-btn ten" id="lotteryTenBtn" onclick="doLottery(10)">
+                            <span class="btn-icon">🔥</span> 十连抽
+                        </button>
+                    </div>
+
+                    <!-- 抽奖结果列表 -->
+                    <div class="lottery-results" id="lotteryResults">
+                        <div class="lottery-result-header">
+                            <span class="col-code">🎟️ 优惠码</span>
+                            <span class="col-traffic">📦 流量</span>
+                        </div>
+                        <div id="lotteryResultRows">
+                            <div style="text-align:center;padding:20px;color:var(--text-sec);font-size:14px;">点击上方按钮开始抽奖</div>
+                        </div>
+                    </div>
+
+
+                    <!-- 概率公示 -->
+                    <div class="lottery-probability">
+                        <div class="probability-title" onclick="toggleProbability()">
+                            <span class="arrow" id="probArrow">▶</span> 奖品概率公示
+                        </div>
+                        <div id="probabilityContent" style="display:none;">
+                            <table class="probability-table">
+                                <thead>
+                                    <tr>
+                                        <th>奖品</th>
+                                        <th>概率</th>
+                                        <th>进度</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    <tr>
+                                        <td>🎟️ 随机立减优惠码</td>
+                                        <td>15%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill common" style="width:15%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 10 GB 流量</td>
+                                        <td>30%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill common" style="width:30%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 25 GB 流量</td>
+                                        <td>20%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill rare" style="width:20%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 40 GB 流量</td>
+                                        <td>15%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill rare" style="width:15%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 55 GB 流量</td>
+                                        <td>10%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill epic" style="width:10%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 70 GB 流量</td>
+                                        <td>5%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill epic" style="width:5%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 85 GB 流量</td>
+                                        <td>3%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill legendary" style="width:3%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 100 GB 流量</td>
+                                        <td>1%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill legendary" style="width:1%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>📦 120 GB 流量</td>
+                                        <td>1%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill legendary" style="width:1%"></div></div></td>
+                                    </tr>
+                                    <tr>
+                                        <td>🌟 特殊奖励</td>
+                                        <td>0%</td>
+                                        <td><div class="probability-bar"><div class="probability-bar-fill legendary" style="width:0%"></div></div></td>
+                                    </tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+
+                    <!-- 抽奖历史 -->
+                    <div class="lottery-history" id="lotteryHistory" style="display:none;">
+                        <div class="history-title">📜 抽奖记录</div>
+                        <div id="historyList"></div>
+                    </div>
+                </div>
+            </div>
+
+
             <!-- 设置页面 -->
             <div class="page-section" id="page-settings">
+
 
                 <div class="settings-card">
                     <div class="settings-title">应用设置</div>
@@ -2216,8 +2422,234 @@ select.form-input { cursor: pointer; }
         });
     };
 
+    // ====== 抽奖功能 - 双摇号器 ======
+    const CHARS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const CODE_LENGTH = 19;
+
+    // 生成随机 19 位字母优惠码
+    function generateRandomCode() {
+        let code = '';
+        for (let i = 0; i < CODE_LENGTH; i++) {
+            code += CHARS.charAt(Math.floor(Math.random() * CHARS.length));
+        }
+        return code;
+    }
+
+    // 生成随机 3 位数字
+    function generateRandomNum() {
+        return Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    }
+
+    // 摇号器动画 - 随机变换
+    function startShakerAnimation(displayEl, textEl, type, duration) {
+        const isCode = type === 'code';
+        displayEl.classList.add('spinning');
+        const interval = 60; // ms per frame
+        let elapsed = 0;
+
+        return new Promise(resolve => {
+            const timer = setInterval(() => {
+                elapsed += interval;
+                if (isCode) {
+                    textEl.textContent = generateRandomCode();
+                } else {
+                    textEl.textContent = generateRandomNum();
+                }
+                // 添加翻转动画
+                textEl.style.animation = 'none';
+                textEl.offsetHeight; // reflow
+                textEl.style.animation = 'charFlip 0.1s ease';
+
+                if (elapsed >= duration) {
+                    clearInterval(timer);
+                    displayEl.classList.remove('spinning');
+                    resolve();
+                }
+            }, interval);
+        });
+    }
+
+    // 奖品池（用于概率抽奖）
+    const LOTTERY_PRIZES = [
+        { name: '🎟️ 随机立减优惠码', prob: 0.15, detail: '随机立减' },
+        { name: '📦 10 GB 流量', prob: 0.30, detail: '10 GB' },
+        { name: '📦 25 GB 流量', prob: 0.20, detail: '25 GB' },
+        { name: '📦 40 GB 流量', prob: 0.15, detail: '40 GB' },
+        { name: '📦 55 GB 流量', prob: 0.10, detail: '55 GB' },
+        { name: '📦 70 GB 流量', prob: 0.05, detail: '70 GB' },
+        { name: '📦 85 GB 流量', prob: 0.03, detail: '85 GB' },
+        { name: '📦 100 GB 流量', prob: 0.01, detail: '100 GB' },
+        { name: '📦 120 GB 流量', prob: 0.01, detail: '120 GB' },
+        { name: '🌟 特殊奖励', prob: 0.00, detail: '特殊奖励' }
+    ];
+
+    // 根据概率抽奖
+    function rollLottery() {
+        const rand = Math.random();
+        let cumulative = 0;
+        for (const prize of LOTTERY_PRIZES) {
+            cumulative += prize.prob;
+            if (rand < cumulative) {
+                return prize;
+            }
+        }
+        return LOTTERY_PRIZES[LOTTERY_PRIZES.length - 1];
+    }
+
+    // 抽奖历史记录
+    let lotteryHistory = [];
+
+    // 执行抽奖
+    async function doLottery(count) {
+        const singleBtn = document.getElementById('lotterySingleBtn');
+        const tenBtn = document.getElementById('lotteryTenBtn');
+        const codeDisplay = document.getElementById('codeDisplay');
+        const codeText = document.getElementById('codeText');
+        const numDisplay = document.getElementById('numDisplay');
+        const numText = document.getElementById('numText');
+        const resultRows = document.getElementById('lotteryResultRows');
+
+        // 禁用按钮
+        singleBtn.disabled = true;
+        tenBtn.disabled = true;
+
+        // 清空之前的结果
+        resultRows.innerHTML = '';
+
+        // 预生成 count 个抽奖结果
+        const results = [];
+        for (let i = 0; i < count; i++) {
+            results.push(rollLottery());
+        }
+
+        // 生成 count 行数据，每行要么是优惠码要么是流量
+        const rowData = [];
+        for (let i = 0; i < count; i++) {
+            const prize = results[i];
+            if (prize.name.includes('优惠码')) {
+                // 抽到优惠码：左边显示优惠码，右边显示 "-"
+                const code = generateRandomCode();
+                rowData.push({ code: code, traffic: '-', trafficClass: 'lose', prize: prize, isCoupon: true });
+            } else {
+                // 抽到流量包：左边显示 "-"，右边显示流量 GB
+                const match = prize.name.match(/(\d+)\s*GB/);
+                const gb = match ? parseInt(match[1]) : 0;
+                rowData.push({ code: '-', traffic: gb + ' GB', trafficClass: gb > 0 ? 'win' : 'lose', prize: prize, isCoupon: false });
+            }
+        }
+
+        // 摇号器动画 + 逐行输出结果
+        // 单抽：摇 1.5 秒后显示结果
+        // 十连抽：摇 15 秒，每秒出一个结果
+        const totalDuration = count === 1 ? 1500 : 15000;
+        const intervalTime = count === 1 ? 1500 : 1500; // 每秒出一个
+
+        // 启动摇号器动画
+        const codePromise = startShakerAnimation(codeDisplay, codeText, 'code', totalDuration);
+        const numPromise = startShakerAnimation(numDisplay, numText, 'num', totalDuration);
+
+        // 逐秒输出结果
+        let currentIndex = 0;
+        const outputTimer = setInterval(() => {
+            if (currentIndex < rowData.length) {
+                const row = rowData[currentIndex];
+                const badgeClass = row.isCoupon ? 'coupon' : (row.trafficClass === 'win' ? 'traffic' : 'none');
+                const badgeText = row.isCoupon ? '优惠码' : (row.trafficClass === 'win' ? '流量' : '未中');
+                const rowHtml = '<div class="lottery-result-row" style="animation:resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">' +
+                    '<span class="row-code">' + row.code + '</span>' +
+                    '<span class="row-traffic ' + row.trafficClass + '">' + row.traffic + ' <span class="row-badge ' + badgeClass + '">' + badgeText + '</span></span>' +
+                    '</div>';
+                resultRows.insertAdjacentHTML('beforeend', rowHtml);
+                currentIndex++;
+            }
+        }, intervalTime);
+
+        // 等待动画完成
+        await Promise.all([codePromise, numPromise]);
+
+        // 动画结束后停止定时器，确保所有结果都已输出
+        clearInterval(outputTimer);
+
+        // 如果还有未输出的结果（理论上不会），补全
+        while (currentIndex < rowData.length) {
+            const row = rowData[currentIndex];
+            const badgeClass = row.isCoupon ? 'coupon' : (row.trafficClass === 'win' ? 'traffic' : 'none');
+            const badgeText = row.isCoupon ? '优惠码' : (row.trafficClass === 'win' ? '流量' : '未中');
+            const rowHtml = '<div class="lottery-result-row" style="animation:resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">' +
+                '<span class="row-code">' + row.code + '</span>' +
+                '<span class="row-traffic ' + row.trafficClass + '">' + row.traffic + ' <span class="row-badge ' + badgeClass + '">' + badgeText + '</span></span>' +
+                '</div>';
+            resultRows.insertAdjacentHTML('beforeend', rowHtml);
+            currentIndex++;
+        }
+
+        // 显示摇号器最终结果（显示最后一个结果）
+        const lastRow = rowData[rowData.length - 1];
+        codeText.textContent = lastRow.code;
+        codeText.style.animation = 'none';
+        codeText.offsetHeight;
+        codeText.style.animation = 'charFlip 0.2s ease';
+
+        numText.textContent = lastRow.isCoupon ? '---' : lastRow.traffic.replace(' GB', '');
+        numText.style.animation = 'none';
+        numText.offsetHeight;
+        numText.style.animation = 'charFlip 0.2s ease';
+
+        // 统计抽到的奖品
+        const prizeCounts = {};
+        results.forEach(r => {
+            prizeCounts[r.name] = (prizeCounts[r.name] || 0) + 1;
+        });
+        const prizeSummary = Object.entries(prizeCounts)
+            .map(([name, cnt]) => name + (cnt > 1 ? ' x' + cnt : ''))
+            .join('、');
+
+        // 记录历史
+        const now = new Date();
+        const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
+        lotteryHistory.push({
+            time: timeStr,
+            count: count,
+            summary: prizeSummary
+        });
+        if (lotteryHistory.length > 20) lotteryHistory.shift();
+
+        // 显示历史记录
+        const historyDiv = document.getElementById('lotteryHistory');
+        const historyList = document.getElementById('historyList');
+        historyDiv.style.display = 'block';
+        let historyHtml = '';
+        for (let i = lotteryHistory.length - 1; i >= 0; i--) {
+            const h = lotteryHistory[i];
+            historyHtml += '<div class="history-item"><span class="history-time">' + h.time + '</span> ' +
+                (h.count === 1 ? '单抽' : '十连') + ': ' + h.summary + '</div>';
+        }
+        historyList.innerHTML = historyHtml;
+
+        // 恢复按钮
+        singleBtn.disabled = false;
+        tenBtn.disabled = false;
+    }
+
+
+
+    // 切换概率公示
+    function toggleProbability() {
+        const content = document.getElementById('probabilityContent');
+        const arrow = document.getElementById('probArrow');
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            arrow.classList.add('open');
+        } else {
+            content.style.display = 'none';
+            arrow.classList.remove('open');
+        }
+    }
+
+
     setTimeout(checkEula, 1000);
 </script>
+
 
 
 
