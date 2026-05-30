@@ -1,12 +1,13 @@
 <!DOCTYPE html>
-/*
- * Fan-ME-FRP - 控制台
- * 开发人员注意！该死的JavaFX的webkit老的估计比IE还老！
- * 所以你写啥都要考虑兼容IE
- * 别用什么太高级的什么鬼技术！
- * 项目能跑最重要！！！
-*/
+<!--
+    Fan-ME-FRP - 控制台
+    开发人员注意！该死的 JavaFX 的 webkit 老的估计比 IE 还老！
+    所以你写啥都要考虑兼容 IE
+    别用什么太高级的什么鬼技术！
+    项目能跑最重要！！！
+-->
 <html lang="zh-CN" data-theme="colorful-black">
+
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
@@ -2566,8 +2567,8 @@ select.form-input { cursor: pointer; }
         singleBtn.textContent = '抽奖中...';
         tenBtn.textContent = '抽奖中...';
 
-        // 清空之前的结果
-        resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-sec);font-size:14px;">🎲 正在抽奖...</div>';
+        // 入口处一次性清空旧结果（之后所有抽奖结果都是追加，绝不再清空）
+        resultRows.innerHTML = '';
 
         // 启动摇号器动画
         var totalDuration = count === 1 ? 1500 : (count * 1500);
@@ -2578,8 +2579,7 @@ select.form-input { cursor: pointer; }
         var allResults = [];
         var currentDrawIndex = 0;
 
-        // 清空结果区域
-        resultRows.innerHTML = '';
+
 
         // 定义单次抽奖函数
         var doSingleDraw = function() {
@@ -2591,6 +2591,24 @@ select.form-input { cursor: pointer; }
                 return;
             }
 
+            // DEBUG 模式：走前端模拟，不调用后端 API（避免消耗真实抽奖次数）
+            if (window.__isDebugMode === true) {
+                // 模拟一次随机抽奖结果，包装成与后端一致的结构
+                var simPrize = rollLottery();
+                var simData;
+                if (simPrize.name.indexOf('优惠码') !== -1) {
+                    simData = { code: 200, data: { type: 'coupon', prize: 'CODE: ' + generateRandomCode(), value: 0 } };
+                } else {
+                    var simMatch = simPrize.name.match(/(\d+)\s*GB/);
+                    var simGb = simMatch ? parseInt(simMatch[1], 10) : 0;
+                    simData = { code: 200, data: { type: 'traffic', prize: 'TRAFFIC: ' + simGb, value: simGb } };
+                }
+                // 用 setTimeout 模拟网络延迟，便于观察动画
+                setTimeout(function() {
+                    handleLotteryResponse(simData);
+                }, 200);
+                return;
+            }
 
             // 调用后端 API 进行单次抽奖（每次只抽 1 个）
             fetch('/api/luckydraw', {
@@ -2599,8 +2617,13 @@ select.form-input { cursor: pointer; }
                 body: JSON.stringify({ count: 1 })
             }).then(function(resp) {
                 return resp.json();
-            }).then(function(data) {
-                if (data.code !== 200) {
+            }).then(handleLotteryResponse);
+        };
+
+        // 抽出独立的响应处理函数，DEBUG 与正常路径共用
+        var handleLotteryResponse = function(data) {
+            if (data.code !== 200) {
+
                     // 抽奖失败：立即停止摇号器动画（无论何种原因）
                     if (codePromise && typeof codePromise.stop === 'function') codePromise.stop();
                     if (numPromise && typeof numPromise.stop === 'function') numPromise.stop();
@@ -2609,8 +2632,15 @@ select.form-input { cursor: pointer; }
                     codeText.textContent = '--------------------';
                     numText.textContent = '000';
 
-                    // 显示错误信息
-                    resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:#ff3b30;font-size:14px;">❌ ' + (data.message || '抽奖失败') + '</div>';
+                    // 错误信息处理：
+                    // - 如果还没抽到任何结果（currentDrawIndex === 0），则覆盖整个结果区显示错误
+                    // - 如果已经抽到一些结果（十连抽中途次数耗尽），则追加错误提示，保留之前的结果
+                    var errMsgHtml = '<div style="text-align:center;padding:16px;color:#ff3b30;font-size:14px;border-radius:12px;background:rgba(255,59,48,0.08);margin-top:8px;">❌ ' + (data.message || '抽奖失败') + '</div>';
+                    if (currentDrawIndex === 0) {
+                        resultRows.innerHTML = errMsgHtml;
+                    } else {
+                        resultRows.insertAdjacentHTML('beforeend', errMsgHtml);
+                    }
 
                     // 恢复按钮
                     singleBtn.disabled = false;
@@ -2622,6 +2652,7 @@ select.form-input { cursor: pointer; }
                     loadLuckyDrawStatus();
                     return;
                 }
+
 
 
                 // 抽奖成功，解析返回的奖品数据
@@ -2636,7 +2667,15 @@ select.form-input { cursor: pointer; }
                 }
 
                 if (prizes.length === 0) {
-                    resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:#ff3b30;font-size:14px;">❌ 未获取到抽奖结果</div>';
+                    // 同样：保留已有结果，仅追加错误提示
+                    if (codePromise && typeof codePromise.stop === 'function') codePromise.stop();
+                    if (numPromise && typeof numPromise.stop === 'function') numPromise.stop();
+                    var emptyMsgHtml = '<div style="text-align:center;padding:16px;color:#ff3b30;font-size:14px;border-radius:12px;background:rgba(255,59,48,0.08);margin-top:8px;">❌ 未获取到抽奖结果</div>';
+                    if (currentDrawIndex === 0) {
+                        resultRows.innerHTML = emptyMsgHtml;
+                    } else {
+                        resultRows.insertAdjacentHTML('beforeend', emptyMsgHtml);
+                    }
                     singleBtn.disabled = false;
                     tenBtn.disabled = false;
                     singleBtn.textContent = '单抽 (10 GB)';
@@ -2664,11 +2703,14 @@ select.form-input { cursor: pointer; }
                     }
                 }
 
-                // 清空"正在抽奖..."提示
-                resultRows.innerHTML = '';
+                // 仅第一次抽奖时清空"正在抽奖..."提示，后续抽奖结果追加显示
+                if (currentDrawIndex === 0) {
+                    resultRows.innerHTML = '';
+                }
 
                 // 刷新抽奖状态（更新剩余次数）
                 loadLuckyDrawStatus();
+
 
                 // 生成当前这次抽奖的行数据（每次只抽 1 个，所以 results 只有 1 个元素）
                 var rowData = [];
@@ -2723,7 +2765,7 @@ select.form-input { cursor: pointer; }
                 if (count === 1) {
                     // 单抽：等待动画结束后完成
                     Promise.all([codePromise, numPromise]).then(function() {
-                        finishLottery();
+                        finishLottery(count);
                     });
                 } else {
                     // 十连抽：1 秒后继续下一次
@@ -2731,8 +2773,8 @@ select.form-input { cursor: pointer; }
                         doSingleDraw();
                     }, 1000);
                 }
-            });
         };
+
 
         // 开始第一次抽奖
         doSingleDraw();
@@ -2910,12 +2952,17 @@ select.form-input { cursor: pointer; }
         return true;
     };
 
+    // 全局 DEBUG 模式标记（DEBUG 模式下抽奖走前端模拟，不消耗真实次数）
+    window.__isDebugMode = false;
+
     // 检测是否为 DEBUG 模式
     fetch('/api/clientstatus').then(function(resp) {
         return resp.json();
     }).then(function(data) {
         if (data.code === 200 && data.data && data.data.status === 'DEBUG') {
+            window.__isDebugMode = true;
             // DEBUG 模式：在右上角添加调试按钮
+
             var debugBtn = document.createElement('button');
             debugBtn.id = 'debugConsoleBtn';
             debugBtn.textContent = '🐛 调试';
