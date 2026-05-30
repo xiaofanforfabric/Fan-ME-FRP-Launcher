@@ -905,6 +905,16 @@ select.form-input { cursor: pointer; }
                             <span class="toggle-slider"></span>
                         </label>
                     </div>
+                    <div class="settings-item">
+                        <div>
+                            <div class="settings-label">自动抽奖</div>
+                            <div class="settings-desc">每天自动执行抽奖</div>
+                        </div>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="autoLotteryToggle">
+                            <span class="toggle-slider"></span>
+                        </label>
+                    </div>
                     <button class="logout-btn" id="logoutBtn">退出登录</button>
                 </div>
             </div>
@@ -2385,6 +2395,55 @@ select.form-input { cursor: pointer; }
     }
     loadAutoSignStatus();
 
+    // ====== 自动抽奖开关 ======
+    const autoLotteryToggle = document.getElementById('autoLotteryToggle');
+
+    // 切换自动抽奖的事件处理函数
+    var autoLotteryChanging = false;
+    autoLotteryToggle.addEventListener('change', function() {
+        if (autoLotteryChanging) return;
+        autoLotteryChanging = true;
+        var enabled = this.checked;
+        console.log('[autoLottery] change 事件触发, this.checked=' + this.checked + ', enabled=' + enabled);
+        fetch('/api/autoluckydraw', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            console.log('[autoLottery] 后端返回:', data);
+            if (data.code === 200) {
+                showToast(data.message, enabled ? 'success' : 'info');
+            } else {
+                showToast(data.message || '操作失败', 'error');
+                autoLotteryToggle.checked = !enabled; // 恢复状态
+            }
+        }).catch(function(e) {
+            console.error('[autoLottery] 请求失败:', e);
+            showToast('请求失败: ' + e.message, 'error');
+            autoLotteryToggle.checked = !enabled; // 恢复状态
+        }).then(function() {
+            autoLotteryChanging = false;
+        });
+    });
+
+    // 加载自动抽奖状态
+    function loadAutoLotteryStatus() {
+        fetch('/api/autoluckydraw').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            if (data.code === 200) {
+                autoLotteryChanging = true;
+                autoLotteryToggle.checked = data.enabled === true;
+                autoLotteryChanging = false;
+            }
+        }).catch(function(e) {
+            console.error('加载自动抽奖状态失败:', e);
+        });
+    }
+    loadAutoLotteryStatus();
+
     // 加载数据
     loadUserData();
     loadProxyList();
@@ -2718,8 +2777,9 @@ select.form-input { cursor: pointer; }
                     var prize = results[i];
                     if (!prize) continue;
                     if (prize.name.indexOf('优惠码') !== -1) {
-                        var code = generateRandomCode();
-                        rowData.push({ code: code, traffic: '-', trafficClass: 'lose', prize: prize, isCoupon: true });
+                        // 使用后端返回的真实优惠码，不再生成随机码
+                        var realCode = prize.value || prize.detail || 'UNKNOWN';
+                        rowData.push({ code: realCode, traffic: '-', trafficClass: 'lose', prize: prize, isCoupon: true });
                     } else {
                         var match = prize.name.match(/(\d+)\s*GB/);
                         var gb = match ? parseInt(match[1], 10) : 0;
