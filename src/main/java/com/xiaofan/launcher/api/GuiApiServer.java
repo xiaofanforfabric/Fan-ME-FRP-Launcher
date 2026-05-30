@@ -233,8 +233,14 @@ public class GuiApiServer {
             } else if ("GET".equalsIgnoreCase(method) && "/api/server_important_info".equals(path)) {
                 String response = handleServerImportantInfo();
                 sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/api/luckydrawstatus".equals(path)) {
+                String response = handleLuckyDrawStatus();
+                sendJsonResponse(out, 200, response);
             } else if ("POST".equalsIgnoreCase(method) && "/api/sign".equals(path)) {
                 String response = handleSign(body);
+                sendJsonResponse(out, 200, response);
+            } else if ("POST".equalsIgnoreCase(method) && "/api/luckydraw".equals(path)) {
+                String response = handleLuckyDraw(body);
                 sendJsonResponse(out, 200, response);
             } else if ("POST".equalsIgnoreCase(method) && "/api/openurl".equals(path)) {
                 String response = handleOpenUrl(body);
@@ -261,6 +267,11 @@ public class GuiApiServer {
                 } else {
                     response = "{\"code\":405,\"message\":\"不支持的请求方法\"}";
                 }
+                sendJsonResponse(out, 200, response);
+            } else if ("GET".equalsIgnoreCase(method) && "/api/clientstatus".equals(path)) {
+                // 返回客户端状态：OK（正常模式）或 DEBUG（调试模式）
+                String status = debugMode ? "DEBUG" : "OK";
+                String response = "{\"code\":200,\"data\":{\"status\":\"" + status + "\"}}";
                 sendJsonResponse(out, 200, response);
             } else if ("GET".equalsIgnoreCase(method) && "/debug/crash".equals(path)) {
                 // 仅在调试模式下可用
@@ -1608,6 +1619,67 @@ public class GuiApiServer {
     }
 
     /**
+     * 处理 GET /api/luckydrawstatus - 获取剩余抽奖次数
+     * 调用 ME Frp API /auth/user/luckydraw
+     * 需要携带 Authorization: Bearer token
+     * 返回上游原始响应: {"code":200,"data":{"count":0,"remaining":9},"message":"获取抽奖次数成功"}
+     */
+    private String handleLuckyDrawStatus() {
+        try {
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (!Files.exists(configFile)) {
+                LOG.warning("[handleLuckyDrawStatus] config.json 不存在");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+            String encoded = extractJsonString(content, "accesstoken");
+            if (encoded == null || encoded.isEmpty()) {
+                LOG.warning("[handleLuckyDrawStatus] config.json 中 accesstoken 为空");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+
+            String apiUrl = ME_FRP_API + "/auth/user/luckydraw";
+            LOG.info("[handleLuckyDrawStatus] >>> 请求上游: GET " + apiUrl);
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("GET");
+            conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleLuckyDrawStatus] <<< 上游返回: HTTP " + responseCode);
+            if (responseCode != 200) {
+                conn.disconnect();
+                LOG.warning("[handleLuckyDrawStatus] 上游返回非200: " + responseCode);
+                return "{\"code\":500,\"message\":\"获取抽奖次数失败\"}";
+            }
+
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleLuckyDrawStatus] <<< 上游响应体: " + respStr);
+            return respStr;
+
+        } catch (Exception e) {
+            LOG.severe("[handleLuckyDrawStatus] 获取抽奖次数异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"获取抽奖次数失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
      * 处理 POST /api/sign - 签到
      * 1. 自动调用 XmrMiner.mine() 进行 PoW 人机验证求解
      * 2. 将 captchaToken 带到请求体中请求 ME Frp API /auth/user/sign
@@ -1683,6 +1755,81 @@ public class GuiApiServer {
         } catch (Exception e) {
             LOG.severe("[handleSign] 签到异常: " + e.getMessage());
             return "{\"code\":500,\"message\":\"签到失败，请稍后重试\"}";
+        }
+    }
+
+    /**
+     * 处理 POST /api/luckydraw - 抽奖
+     * 调用 ME Frp API /auth/user/luckydraw 进行抽奖
+     * 需要携带 Authorization: Bearer token
+     * Body: {"count": 1} 或 {"count": 10}
+     * 返回上游原始响应
+     */
+    private String handleLuckyDraw(String body) {
+        try {
+            Path configFile = resDir.resolve(CONFIG_FILE_NAME);
+            if (!Files.exists(configFile)) {
+                LOG.warning("[handleLuckyDraw] config.json 不存在");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String content = new String(Files.readAllBytes(configFile), StandardCharsets.UTF_8);
+            String encoded = extractJsonString(content, "accesstoken");
+            if (encoded == null || encoded.isEmpty()) {
+                LOG.warning("[handleLuckyDraw] config.json 中 accesstoken 为空");
+                return "{\"code\":401,\"message\":\"未登录\"}";
+            }
+
+            String accesstoken = new String(Base64.getDecoder().decode(encoded), StandardCharsets.UTF_8);
+
+            // 从请求体中提取 count 参数
+            int count = extractJsonInt(body, "count");
+            if (count != 1 && count != 10) {
+                LOG.warning("[handleLuckyDraw] count 参数必须为 1 或 10");
+                return "{\"code\":400,\"message\":\"count 参数必须为 1 或 10\"}";
+            }
+
+            // 构建请求体
+            String drawBody = "{\"count\":" + count + "}";
+
+            String apiUrl = ME_FRP_API + "/auth/user/luckydraw";
+            LOG.info("[handleLuckyDraw] >>> 请求上游: POST " + apiUrl);
+            LOG.info("[handleLuckyDraw] >>> 请求体: " + maskSensitiveBody(drawBody));
+            URL url = new URL(apiUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setRequestMethod("POST");
+            conn.setRequestProperty("Authorization", "Bearer " + accesstoken);
+            conn.setRequestProperty("Content-Type", "application/json");
+            conn.setRequestProperty("User-Agent", "Fan-ME-FRP-Launcher/1.0");
+            conn.setDoOutput(true);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+
+            byte[] bodyBytes = drawBody.getBytes(StandardCharsets.UTF_8);
+            conn.setRequestProperty("Content-Length", String.valueOf(bodyBytes.length));
+            conn.getOutputStream().write(bodyBytes);
+
+            int responseCode = conn.getResponseCode();
+            LOG.info("[handleLuckyDraw] <<< 上游返回: HTTP " + responseCode);
+            StringBuilder apiResponse = new StringBuilder();
+            try (BufferedReader br = new BufferedReader(
+                    new InputStreamReader(
+                            responseCode == 200 ? conn.getInputStream() : conn.getErrorStream(),
+                            StandardCharsets.UTF_8))) {
+                String line;
+                while ((line = br.readLine()) != null) {
+                    apiResponse.append(line);
+                }
+            }
+            conn.disconnect();
+
+            String respStr = apiResponse.toString();
+            LOG.info("[handleLuckyDraw] <<< 上游响应体: " + maskSensitiveBody(respStr));
+            return respStr;
+
+        } catch (Exception e) {
+            LOG.severe("[handleLuckyDraw] 抽奖异常: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"抽奖失败，请稍后重试\"}";
         }
     }
 

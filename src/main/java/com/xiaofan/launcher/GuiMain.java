@@ -15,13 +15,18 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipInputStream;
 
 import com.xiaofan.launcher.api.GuiApiServer;
+import com.xiaofan.launcher.errors.JavaScriptErrorException;
+import com.xiaofan.launcher.errors.JavaScriptWarnException;
 import com.xiaofan.launcher.frpc.FrpcManager;
+import com.xiaofan.launcher.logs.ErrorReporter;
 
 import javafx.application.Platform;
 import javafx.embed.swing.JFXPanel;
 import javafx.scene.Scene;
 import javafx.scene.web.WebView;
 import javafx.stage.Stage;
+
+import java.util.logging.Logger;
 
 /**
  * GUI 主入口（需要 JavaFX）
@@ -105,6 +110,144 @@ public class GuiMain {
                         "Chrome/120.0.0.0 Safari/537.36 " +
                         "Fan-ME-FRP-Launcher/1.0"
                     );
+
+                    // 设置 JavaScript 控制台日志捕获
+                    final Logger jsLogger = Logger.getLogger("BrowserJS");
+                    // 创建错误报告器，用于生成 JS 错误报告
+                    final ErrorReporter errorReporter = new ErrorReporter(getJarDir());
+                    // 使用 confirmHandler 捕获日志（比 setOnAlert 更可靠）
+                    webView.getEngine().setConfirmHandler(message -> {
+                        if (message.startsWith("[JS_LOG]")) {
+                            jsLogger.info(message.substring(8));
+                        } else if (message.startsWith("[JS_WARN]")) {
+                            jsLogger.warning(message.substring(9));
+                            // 生成警告错误报告
+                            String jsMsg = message.substring(9);
+                            JavaScriptWarnException warnEx = new JavaScriptWarnException(jsMsg);
+                            Path reportPath = errorReporter.reportError(warnEx, "JavaScript 警告: " + jsMsg);
+                            if (reportPath != null) {
+                                System.err.println("[GuiMain] JavaScript 警告报告已保存至: " + reportPath.toAbsolutePath());
+                            }
+                        } else if (message.startsWith("[JS_ERROR]")) {
+                            jsLogger.severe(message.substring(10));
+                            // 生成错误报告
+                            String jsMsg = message.substring(10);
+                            JavaScriptErrorException errorEx = new JavaScriptErrorException(jsMsg);
+                            Path reportPath = errorReporter.reportError(errorEx, "JavaScript 错误: " + jsMsg);
+                            if (reportPath != null) {
+                                System.err.println("[GuiMain] JavaScript 错误报告已保存至: " + reportPath.toAbsolutePath());
+                            }
+                        } else {
+                            jsLogger.info(message);
+                        }
+                        return true; // 模拟用户点击确认
+                    });
+                    // 同时捕获 alert（作为备用）
+                    webView.getEngine().setOnAlert(event -> {
+                        String msg = event.getData();
+                        if (msg.startsWith("[JS_LOG]")) {
+                            jsLogger.info(msg.substring(8));
+                        } else if (msg.startsWith("[JS_WARN]")) {
+                            jsLogger.warning(msg.substring(9));
+                            // 生成警告错误报告
+                            String jsMsg = msg.substring(9);
+                            JavaScriptWarnException warnEx = new JavaScriptWarnException(jsMsg);
+                            Path reportPath = errorReporter.reportError(warnEx, "JavaScript 警告: " + jsMsg);
+                            if (reportPath != null) {
+                                System.err.println("[GuiMain] JavaScript 警告报告已保存至: " + reportPath.toAbsolutePath());
+                            }
+                        } else if (msg.startsWith("[JS_ERROR]")) {
+                            jsLogger.severe(msg.substring(10));
+                            // 生成错误报告
+                            String jsMsg = msg.substring(10);
+                            JavaScriptErrorException errorEx = new JavaScriptErrorException(jsMsg);
+                            Path reportPath = errorReporter.reportError(errorEx, "JavaScript 错误: " + jsMsg);
+                            if (reportPath != null) {
+                                System.err.println("[GuiMain] JavaScript 错误报告已保存至: " + reportPath.toAbsolutePath());
+                            }
+                        } else {
+                            jsLogger.info(msg);
+                        }
+                    });
+
+                    // 监听页面加载状态（包括失败和 CSS 解析错误）
+                    webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+                        String url = webView.getEngine().getLocation();
+                        switch (newState) {
+                            case RUNNING:
+                                System.out.println("[WebView] 开始加载: " + url);
+                                break;
+                            case SUCCEEDED:
+                                System.out.println("[WebView] 加载成功: " + url);
+                                try {
+                                    // 注入 console 日志捕获脚本（使用 confirm() 传递到 Java 端）
+                                    // 注意：不要使用 // 注释，Java 字符串中的 // 在某些编译器下会被当作行注释导致截断
+                                    String script =
+                                        "(function() {" +
+                                        "var logger = window.console;" +
+                                        "if (!logger) return;" +
+                                        "var originalLog = logger.log;" +
+                                        "var originalWarn = logger.warn;" +
+                                        "var originalError = logger.error;" +
+                                        "var originalInfo = logger.info;" +
+                                        "function formatArgs(args) {" +
+                                        "var parts = [];" +
+                                        "for (var i = 0; i < args.length; i++) {" +
+                                        "try {" +
+                                        "if (typeof args[i] === 'object') {" +
+                                        "parts.push(JSON.stringify(args[i]));" +
+                                        "} else {" +
+                                        "parts.push(String(args[i]));" +
+                                        "}" +
+                                        "} catch(e) {" +
+                                        "parts.push('[object]');" +
+                                        "}" +
+                                        "}" +
+                                        "return parts.join(' ');" +
+                                        "}" +
+                                        "logger.log = function() {" +
+                                        "confirm('[JS_LOG]' + formatArgs(arguments));" +
+                                        "if (originalLog) originalLog.apply(logger, arguments);" +
+                                        "};" +
+                                        "logger.info = function() {" +
+                                        "confirm('[JS_LOG]' + formatArgs(arguments));" +
+                                        "if (originalInfo) originalInfo.apply(logger, arguments);" +
+                                        "};" +
+                                        "logger.warn = function() {" +
+                                        "confirm('[JS_WARN]' + formatArgs(arguments));" +
+                                        "if (originalWarn) originalWarn.apply(logger, arguments);" +
+                                        "};" +
+                                        "logger.error = function() {" +
+                                        "confirm('[JS_ERROR]' + formatArgs(arguments));" +
+                                        "if (originalError) originalError.apply(logger, arguments);" +
+                                        "};" +
+                                        "window.onerror = function(msg, source, line, col, error) {" +
+                                        "confirm('[JS_ERROR]Uncaught: ' + msg + ' at ' + source + ':' + line);" +
+                                        "return true;" +
+                                        "};" +
+                                        "confirm('[JS_LOG]JavaScript console capture enabled');" +
+                                        "})();";
+                                    webView.getEngine().executeScript(script);
+                                    System.out.println("[GuiMain] JavaScript 控制台日志捕获已注入");
+                                } catch (Exception e) {
+                                    System.err.println("[GuiMain] 注入控制台日志捕获脚本失败: " + e.getMessage());
+                                }
+
+                                break;
+                            case FAILED:
+                                // 捕获页面加载失败的错误（包括 CSS 资源加载失败、404 等）
+                                Throwable exception = webView.getEngine().getLoadWorker().getException();
+                                String errorMsg = (exception != null) ? exception.getMessage() : "未知错误";
+                                System.err.println("[WebView] 加载失败: " + url + " - " + errorMsg);
+                                if (exception != null) {
+                                    exception.printStackTrace(System.err);
+                                }
+                                break;
+                            default:
+                                break;
+                        }
+                    });
+
 
                     webView.getEngine().load("http://127.0.0.1:1025/login.html");
 
