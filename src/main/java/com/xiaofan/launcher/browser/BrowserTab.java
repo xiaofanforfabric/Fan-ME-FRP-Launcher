@@ -1,6 +1,8 @@
 package com.xiaofan.launcher.browser;
 
 import com.xiaofan.launcher.browser.BrowserEngine.HttpResponse;
+import com.xiaofan.launcher.errors.JavaScriptErrorException;
+import com.xiaofan.launcher.errors.JavaScriptWarnException;
 import javafx.application.Platform;
 import javafx.beans.property.ReadOnlyStringProperty;
 import javafx.beans.property.SimpleStringProperty;
@@ -10,6 +12,8 @@ import javafx.scene.layout.StackPane;
 import javafx.scene.web.WebView;
 
 import java.io.IOException;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * 浏览器标签页
@@ -17,6 +21,8 @@ import java.io.IOException;
  * 通过 JavaFX WebView 渲染（如果可用）或纯文本显示
  */
 public class BrowserTab extends StackPane {
+
+    private static final Logger JS_LOGGER = Logger.getLogger("BrowserJS");
 
     private final BrowserEngine browserEngine;
     private final StringProperty titleProperty;
@@ -70,23 +76,96 @@ public class BrowserTab extends StackPane {
             webView.setContextMenuEnabled(true);
             webView.setZoom(1.0);
 
-            // 监听加载状态
+            // 设置 JavaScript 控制台日志捕获
+            // 使用 confirmHandler 捕获日志（比 setOnAlert 更可靠）
+            webView.getEngine().setConfirmHandler(message -> {
+                try {
+                    if (message.startsWith("[JS_LOG]")) {
+                        JS_LOGGER.info(message.substring(8));
+                    } else if (message.startsWith("[JS_WARN]")) {
+                        JS_LOGGER.warning(message.substring(9));
+                        // 抛出 JavaScriptWarnException 并立即捕获，记录到日志
+                        try {
+                            throw new JavaScriptWarnException(message.substring(9));
+                        } catch (JavaScriptWarnException e) {
+                            JS_LOGGER.warning("捕获到前端警告: " + e.getMessage());
+                        }
+                    } else if (message.startsWith("[JS_ERROR]")) {
+                        JS_LOGGER.severe(message.substring(10));
+                        // 抛出 JavaScriptErrorException 并立即捕获，记录到日志
+                        try {
+                            throw new JavaScriptErrorException(message.substring(10));
+                        } catch (JavaScriptErrorException e) {
+                            JS_LOGGER.severe("捕获到前端错误: " + e.getMessage());
+                        }
+                    } else {
+                        JS_LOGGER.info(message);
+                    }
+                } catch (Exception e) {
+                    JS_LOGGER.warning("处理 JS 日志时发生异常: " + e.getMessage());
+                }
+                return true;
+            });
+            // 同时捕获 alert（作为备用）
+            webView.getEngine().setOnAlert(event -> {
+                try {
+                    String msg = event.getData();
+                    if (msg.startsWith("[JS_LOG]")) {
+                        JS_LOGGER.info(msg.substring(8));
+                    } else if (msg.startsWith("[JS_WARN]")) {
+                        JS_LOGGER.warning(msg.substring(9));
+                        // 抛出 JavaScriptWarnException 并立即捕获，记录到日志
+                        try {
+                            throw new JavaScriptWarnException(msg.substring(9));
+                        } catch (JavaScriptWarnException e) {
+                            JS_LOGGER.warning("捕获到前端警告: " + e.getMessage());
+                        }
+                    } else if (msg.startsWith("[JS_ERROR]")) {
+                        JS_LOGGER.severe(msg.substring(10));
+                        // 抛出 JavaScriptErrorException 并立即捕获，记录到日志
+                        try {
+                            throw new JavaScriptErrorException(msg.substring(10));
+                        } catch (JavaScriptErrorException e) {
+                            JS_LOGGER.severe("捕获到前端错误: " + e.getMessage());
+                        }
+                    } else {
+                        JS_LOGGER.info(msg);
+                    }
+                } catch (Exception e) {
+                    JS_LOGGER.warning("处理 JS 日志时发生异常: " + e.getMessage());
+                }
+            });
+
+            // 监听加载状态（包括失败和 CSS 解析错误）
             webView.getEngine().getLoadWorker().stateProperty().addListener((obs, oldState, newState) -> {
+                String url = webView.getEngine().getLocation();
                 switch (newState) {
                     case RUNNING:
                         isLoading = true;
+                        System.out.println("[BrowserTab] 开始加载: " + url);
                         break;
                     case SUCCEEDED:
                         isLoading = false;
                         updateTitleAndUrl();
+                        System.out.println("[BrowserTab] 加载成功: " + url);
+                        // 页面加载完成后注入 console 日志捕获脚本
+                        injectConsoleCapture();
                         break;
                     case FAILED:
                         isLoading = false;
+                        // 捕获页面加载失败的错误（包括 CSS 资源加载失败、404 等）
+                        Throwable exception = webView.getEngine().getLoadWorker().getException();
+                        String errorMsg = (exception != null) ? exception.getMessage() : "未知错误";
+                        System.err.println("[BrowserTab] 加载失败: " + url + " - " + errorMsg);
+                        if (exception != null) {
+                            exception.printStackTrace(System.err);
+                        }
                         break;
                     default:
                         break;
                 }
             });
+
 
             webView.getEngine().titleProperty().addListener((obs, old, title) -> {
                 if (title != null && !title.isEmpty()) {
@@ -377,6 +456,68 @@ public class BrowserTab extends StackPane {
     public boolean isLoading() {
         return isLoading;
     }
+
+    /**
+     * 注入 JavaScript 控制台日志捕获脚本
+     * 重写 console.log/warn/error，通过 confirm 传递到 Java 端
+     * 同时捕获未处理的错误 (window.onerror)
+     */
+    private void injectConsoleCapture() {
+        if (webView == null) return;
+        try {
+            // 注意：不要使用 // 注释或缩进，Java 字符串中的 // 在某些编译器下会被当作行注释导致截断
+            String script =
+                "(function() {" +
+                "var logger = window.console;" +
+                "if (!logger) return;" +
+                "var originalLog = logger.log;" +
+                "var originalWarn = logger.warn;" +
+                "var originalError = logger.error;" +
+                "var originalInfo = logger.info;" +
+                "function formatArgs(args) {" +
+                "var parts = [];" +
+                "for (var i = 0; i < args.length; i++) {" +
+                "try {" +
+                "if (typeof args[i] === 'object') {" +
+                "parts.push(JSON.stringify(args[i]));" +
+                "} else {" +
+                "parts.push(String(args[i]));" +
+                "}" +
+                "} catch(e) {" +
+                "parts.push('[object]');" +
+                "}" +
+                "}" +
+                "return parts.join(' ');" +
+                "}" +
+                "logger.log = function() {" +
+                "confirm('[JS_LOG]' + formatArgs(arguments));" +
+                "if (originalLog) originalLog.apply(logger, arguments);" +
+                "};" +
+                "logger.info = function() {" +
+                "confirm('[JS_LOG]' + formatArgs(arguments));" +
+                "if (originalInfo) originalInfo.apply(logger, arguments);" +
+                "};" +
+                "logger.warn = function() {" +
+                "confirm('[JS_WARN]' + formatArgs(arguments));" +
+                "if (originalWarn) originalWarn.apply(logger, arguments);" +
+                "};" +
+                "logger.error = function() {" +
+                "confirm('[JS_ERROR]' + formatArgs(arguments));" +
+                "if (originalError) originalError.apply(logger, arguments);" +
+                "};" +
+                "window.onerror = function(msg, source, line, col, error) {" +
+                "confirm('[JS_ERROR]Uncaught: ' + msg + ' at ' + source + ':' + line);" +
+                "return true;" +
+                "};" +
+                "confirm('[JS_LOG]JavaScript console capture enabled');" +
+                "})();";
+            webView.getEngine().executeScript(script);
+        } catch (Exception e) {
+            // 注入失败不影响正常功能
+            System.err.println("[BrowserTab] 注入控制台日志捕获脚本失败: " + e.getMessage());
+        }
+    }
+
 
     /**
      * 清理资源

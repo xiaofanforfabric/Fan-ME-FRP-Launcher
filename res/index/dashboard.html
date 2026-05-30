@@ -1,4 +1,11 @@
 <!DOCTYPE html>
+/*
+ * Fan-ME-FRP - 控制台
+ * 开发人员注意！该死的JavaFX的webkit老的估计比IE还老！
+ * 所以你写啥都要考虑兼容IE
+ * 别用什么太高级的什么鬼技术！
+ * 项目能跑最重要！！！
+*/
 <html lang="zh-CN" data-theme="colorful-black">
 <head>
 <meta charset="UTF-8">
@@ -165,7 +172,11 @@ input { user-select: auto; -webkit-user-select: auto; }
 .shaker-display .char.flip { animation: charFlip 0.1s ease; }
 @keyframes charFlip { 0% { transform: translateY(-4px) scale(1.1); opacity: 0.6; } 100% { transform: translateY(0) scale(1); opacity: 1; } }
 .shaker-code { font-size: 28px; font-weight: 700; color: var(--primary); }
-.shaker-num { font-size: 48px; font-weight: 800; background: linear-gradient(135deg, #ff2d55, #ff9500); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+.shaker-num {
+    font-size: 48px;
+    font-weight: 800;
+    color: #ff9500;   /* 纯橙色，IE 稳稳显示 */
+}
 
 /* 抽奖结果列表 - 每行显示优惠码 + 流量 */
 .lottery-results { margin-bottom: 24px; min-height: 40px; }
@@ -733,6 +744,20 @@ select.form-input { cursor: pointer; }
                         <div class="lottery-subtitle">试试手气，赢取流量包和优惠券！</div>
                     </div>
 
+                    <!-- 账户流量 & 剩余抽奖次数 -->
+                    <div style="display:flex;gap:16px;margin-bottom:24px;">
+                        <div style="flex:1;background:rgba(120,120,128,0.04);border-radius:20px;padding:16px 20px;border:1px solid var(--glass-border);text-align:center;">
+                            <div style="font-size:13px;font-weight:600;color:var(--text-sec);margin-bottom:6px;">📊 账户流量</div>
+                            <div style="font-size:22px;font-weight:800;color:var(--primary);" id="luckyDrawTraffic">加载中...</div>
+                            <div style="font-size:12px;color:var(--text-sec);margin-top:4px;">每次抽奖消耗 <strong style="color:#ff9500;">10 GB</strong></div>
+                        </div>
+                        <div style="flex:1;background:rgba(120,120,128,0.04);border-radius:20px;padding:16px 20px;border:1px solid var(--glass-border);text-align:center;">
+                            <div style="font-size:13px;font-weight:600;color:var(--text-sec);margin-bottom:6px;">🎯 剩余抽奖次数</div>
+                            <div style="font-size:22px;font-weight:800;color:#ff9500;" id="luckyDrawRemaining">加载中...</div>
+                            <div style="font-size:12px;color:var(--text-sec);margin-top:4px;">今日已抽 <strong id="luckyDrawCount" style="color:var(--text-main);">0</strong> 次</div>
+                        </div>
+                    </div>
+
                     <!-- 两个摇号器 -->
                     <div class="shaker-container">
                         <!-- 优惠码摇号器（19位字母） -->
@@ -989,33 +1014,32 @@ select.form-input { cursor: pointer; }
     });
 
     // 一言
-    const fetchHitokoto = async () => {
-        try {
-            const res = await fetch('https://v1.hitokoto.cn/?c=i&c=d');
-            const data = await res.json();
+    var fetchHitokoto = function() {
+        fetch('https://v1.hitokoto.cn/?c=i&c=d').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             document.getElementById('hitoText').textContent = data.hitokoto;
             document.getElementById('hitoAuthor').textContent = data.from ? '— ' + data.from : '';
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('hitoText').textContent = '保持专注，保持简单。';
-        }
+        });
     };
     document.getElementById('hitokotoBox').addEventListener('click', fetchHitokoto);
     fetchHitokoto();
 
     // ====== 用户数据加载 ======
-    let currentUserGroup = 'default'; // 当前用户组，默认 default
+    var currentUserGroup = 'default'; // 当前用户组，默认 default
 
-    const loadUserData = async () => {
-        try {
-            const res = await fetch('/api/userdata');
-            const data = await res.json();
-
+    var loadUserData = function() {
+        fetch('/api/userdata').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code !== 200 || !data.data) {
                 window.location.href = '/login.html';
                 return;
             }
 
-            const u = data.data;
+            var u = data.data;
 
             // 保存当前用户组
             currentUserGroup = u.group || 'default';
@@ -1038,7 +1062,7 @@ select.form-input { cursor: pointer; }
             document.getElementById('infoStatus').textContent = formatStatus(u.status);
             document.getElementById('infoSigned').textContent = u.todaySigned ? '已签到' : '未签到';
             // 签到按钮状态
-            const signBtn = document.getElementById('signBtn');
+            var signBtn = document.getElementById('signBtn');
             if (u.todaySigned) {
                 signBtn.disabled = true;
                 signBtn.style.background = 'rgba(120,120,128,0.2)';
@@ -1055,7 +1079,7 @@ select.form-input { cursor: pointer; }
 
             // 隧道
             document.getElementById('tunnelCount').textContent = u.usedProxies + ' / ' + u.maxProxies;
-            const pct = u.maxProxies > 0 ? Math.round((u.usedProxies / u.maxProxies) * 100) : 0;
+            var pct = u.maxProxies > 0 ? Math.round((u.usedProxies / u.maxProxies) * 100) : 0;
             document.getElementById('tunnelBarFill').style.width = pct + '%';
             document.getElementById('tunnelBarText').textContent = '已使用 ' + u.usedProxies + ' 条隧道';
 
@@ -1070,24 +1094,23 @@ select.form-input { cursor: pointer; }
 
             // 获取重要公告（弹窗）
             fetchImportantNotice();
-
-        } catch (err) {
+        }).catch(function(err) {
             console.error('加载用户数据失败:', err);
             window.location.href = '/login.html';
-        }
+        });
     };
 
     // 获取 ME Frp 系统运行状态
-    async function fetchServerStatus() {
-        try {
-            const resp = await fetch('/api/serverstatus');
-            const data = await resp.json();
-            const dot = document.getElementById('mefrpDot');
-            const text = document.getElementById('mefrpText');
-            const statusEl = document.getElementById('mefrpStatus');
+    var fetchServerStatus = function() {
+        fetch('/api/serverstatus').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            var dot = document.getElementById('mefrpDot');
+            var text = document.getElementById('mefrpText');
+            var statusEl = document.getElementById('mefrpStatus');
             if (data.code === 200 && data.data) {
-                const status = data.data.status;
-                const remark = data.data.remark || '';
+                var status = data.data.status;
+                var remark = data.data.remark || '';
                 if (status === 0) {
                     dot.style.background = '#34c759';
                     text.textContent = 'ME Frp ' + remark;
@@ -1110,16 +1133,16 @@ select.form-input { cursor: pointer; }
                 text.style.color = 'var(--text-sec)';
                 statusEl.style.background = 'rgba(120,120,128,0.08)';
             }
-        } catch (e) {
-            const dot = document.getElementById('mefrpDot');
-            const text = document.getElementById('mefrpText');
-            const statusEl = document.getElementById('mefrpStatus');
+        }).catch(function(e) {
+            var dot = document.getElementById('mefrpDot');
+            var text = document.getElementById('mefrpText');
+            var statusEl = document.getElementById('mefrpStatus');
             dot.style.background = 'var(--text-sec)';
             text.textContent = '检查失败';
             text.style.color = 'var(--text-sec)';
             statusEl.style.background = 'rgba(120,120,128,0.08)';
-        }
-    }
+        });
+    };
 
     const formatBandwidth = (kbps) => {
         const mbps = kbps / 128;
@@ -1168,18 +1191,18 @@ select.form-input { cursor: pointer; }
     }
 
     // 获取重要公告（弹窗）
-    async function fetchImportantNotice() {
-        try {
-            const resp = await fetch('/api/server_important_info');
-            const data = await resp.json();
+    var fetchImportantNotice = function() {
+        fetch('/api/server_important_info').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code === 200 && data.data && data.changed) {
                 // 有新的重要公告，弹窗显示
                 showImportantNoticeModal(data.data);
             }
-        } catch (e) {
+        }).catch(function(e) {
             console.error('获取重要公告失败:', e);
-        }
-    }
+        });
+    };
 
     // 显示重要公告弹窗
     function showImportantNoticeModal(content) {
@@ -1220,15 +1243,15 @@ select.form-input { cursor: pointer; }
     }
 
     // 获取公告
-    async function fetchNotice() {
-        try {
-            const resp = await fetch('/api/server_info');
-            const data = await resp.json();
-            const area = document.getElementById('noticeArea');
-            const content = document.getElementById('noticeContent');
+    var fetchNotice = function() {
+        fetch('/api/server_info').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            var area = document.getElementById('noticeArea');
+            var content = document.getElementById('noticeContent');
             if (data.code === 200 && data.data) {
                 // data.data 是公告字符串（含 Markdown/HTML）
-                const noticeStr = data.data;
+                var noticeStr = data.data;
                 if (noticeStr && noticeStr.length > 0) {
                     area.style.display = 'block';
                     content.innerHTML = mdToHtml(noticeStr);
@@ -1238,11 +1261,11 @@ select.form-input { cursor: pointer; }
             } else {
                 area.style.display = 'none';
             }
-        } catch (e) {
-            const area = document.getElementById('noticeArea');
+        }).catch(function(e) {
+            var area = document.getElementById('noticeArea');
             if (area) area.style.display = 'none';
-        }
-    }
+        });
+    };
 
     const formatBytes = (bytes) => {
         if (bytes >= 1073741824) return (bytes / 1073741824).toFixed(2) + ' GB';
@@ -1286,65 +1309,68 @@ select.form-input { cursor: pointer; }
                 case 'serverstatus':
                     loadServerStatus();
                     break;
+                case 'lottery':
+                    loadLuckyDrawStatus();
+                    break;
             }
         });
     });
 
     // 退出登录
-    document.getElementById('logoutBtn').addEventListener('click', async () => {
-        try {
-            await fetch('/api/logout', { method: 'POST' });
-        } catch (e) {}
-        window.location.href = '/login.html';
+    document.getElementById('logoutBtn').addEventListener('click', function() {
+        fetch('/api/logout', { method: 'POST' }).then(function() {
+            window.location.href = '/login.html';
+        }).catch(function() {
+            window.location.href = '/login.html';
+        });
     });
 
     // 加载隧道列表
-    async function loadProxyList() {
-        try {
-            const [proxyResp, statusResp] = await Promise.all([
-                fetch('/api/proxylist'),
-                fetch('/api/getserverstatus')
-            ]);
-            const data = await proxyResp.json();
-            const statusData = await statusResp.json();
+    var loadProxyList = function() {
+        // 使用 Promise.all 并行请求
+        var proxyPromise = fetch('/api/proxylist').then(function(r) { return r.json(); });
+        var statusPromise = fetch('/api/getserverstatus').then(function(r) { return r.json(); });
+        Promise.all([proxyPromise, statusPromise]).then(function(results) {
+            var data = results[0];
+            var statusData = results[1];
             if (data.code !== 200 || !data.data) {
                 document.getElementById('proxyTableBody').innerHTML = '<tr><td colspan="7" class="loading-row">获取隧道列表失败</td></tr>';
                 return;
             }
-            const proxies = data.data.proxies || [];
-            const nodes = data.data.nodes || [];
+            var proxies = data.data.proxies || [];
+            var nodes = data.data.nodes || [];
             // 缓存数据供详情弹窗使用
             cachedProxies = proxies;
             cachedNodeMap = {};
-            nodes.forEach(n => { cachedNodeMap[n.nodeId] = n; });
+            nodes.forEach(function(n) { cachedNodeMap[n.nodeId] = n; });
             // 构建节点名称映射
-            const nodeMap = {};
-            nodes.forEach(n => { nodeMap[n.nodeId] = n.name; });
+            var nodeMap = {};
+            nodes.forEach(function(n) { nodeMap[n.nodeId] = n.name; });
 
             // 获取本地运行状态映射
-            const localRunningMap = {};
+            var localRunningMap = {};
             if (statusData.code === 200 && statusData.data) {
                 Object.assign(localRunningMap, statusData.data);
             }
 
             document.getElementById('proxyCount').textContent = proxies.length + ' 条';
 
-            const tbody = document.getElementById('proxyTableBody');
+            var tbody = document.getElementById('proxyTableBody');
             if (proxies.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="7" class="loading-row">暂无隧道</td></tr>';
                 return;
             }
 
-            let html = '';
-            proxies.forEach(p => {
-                let statusClass, statusText, statusTitle;
+            var html = '';
+            proxies.forEach(function(p) {
+                var statusClass, statusText, statusTitle;
                 if (p.isDisabled) {
                     statusClass = 'status-disabled';
                     statusText = '禁用';
                     statusTitle = '';
                 } else if (p.isOnline) {
                     // 检查是否在本机运行
-                    const isLocalRunning = localRunningMap[String(p.proxyId)] === true;
+                    var isLocalRunning = localRunningMap[String(p.proxyId)] === true;
                     if (isLocalRunning) {
                         statusClass = 'status-online';
                         statusText = '在线';
@@ -1359,9 +1385,9 @@ select.form-input { cursor: pointer; }
                     statusText = '离线';
                     statusTitle = '';
                 }
-                const nodeName = nodeMap[p.nodeId] || '节点#' + p.nodeId;
-                const localAddr = p.localIp + ':' + p.localPort;
-                const remotePort = p.proxyType === 'http' ? (p.domain || '-') : (p.remotePort || '-');
+                var nodeName = nodeMap[p.nodeId] || '节点#' + p.nodeId;
+                var localAddr = p.localIp + ':' + p.localPort;
+                var remotePort = p.proxyType === 'http' ? (p.domain || '-') : (p.remotePort || '-');
                 html += '<tr>' +
                     '<td><span class="proxy-name">' + escapeHtml(p.proxyName) + '</span></td>' +
                     '<td><span class="proxy-type">' + escapeHtml(p.proxyType) + '</span></td>' +
@@ -1378,10 +1404,10 @@ select.form-input { cursor: pointer; }
                     '</tr>';
             });
             tbody.innerHTML = html;
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('proxyTableBody').innerHTML = '<tr><td colspan="7" class="loading-row">加载失败: ' + e.message + '</td></tr>';
-        }
-    }
+        });
+    };
 
     function escapeHtml(str) {
         if (!str) return '';
@@ -1389,53 +1415,55 @@ select.form-input { cursor: pointer; }
     }
 
     // 加载节点列表
-    async function loadNodeList() {
-        try {
-            const resp = await fetch('/api/nodelist');
-            const data = await resp.json();
+    var loadNodeList = function() {
+        fetch('/api/nodelist').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code !== 200 || !data.data) {
                 document.getElementById('nodeGrid').innerHTML = '<div class="loading-row">获取节点列表失败</div>';
                 return;
             }
-            const nodes = data.data || [];
+            var nodes = data.data || [];
             document.getElementById('nodeCount').textContent = nodes.length + ' 个节点';
 
-            const grid = document.getElementById('nodeGrid');
+            var grid = document.getElementById('nodeGrid');
             if (nodes.length === 0) {
                 grid.innerHTML = '<div class="loading-row">暂无可用节点</div>';
                 return;
             }
 
             // 按区域分组排序
-            const regionOrder = { 'cn': 0, 'cnos': 1, 'oversea': 2 };
-            const regionLabel = { 'cn': '国内', 'cnos': '港澳台', 'oversea': '海外' };
-            nodes.sort((a, b) => (regionOrder[a.region] || 9) - (regionOrder[b.region] || 9) || a.nodeId - b.nodeId);
+            var regionOrder = { 'cn': 0, 'cnos': 1, 'oversea': 2 };
+            var regionLabel = { 'cn': '国内', 'cnos': '港澳台', 'oversea': '海外' };
+            nodes.sort(function(a, b) {
+                return (regionOrder[a.region] || 9) - (regionOrder[b.region] || 9) || a.nodeId - b.nodeId;
+            });
 
             // 判断用户组是否在节点的 allowGroup 中
             function canAccessNode(node) {
                 if (!node.allowGroup) return true;
-                const groups = node.allowGroup.split(';').map(g => g.trim());
-                return groups.includes(currentUserGroup);
+                var groups = node.allowGroup.split(';').map(function(g) { return g.trim(); });
+                return groups.indexOf(currentUserGroup) !== -1;
             }
 
             // 判断节点是否为 VIP 节点（allowGroup 不含 default/noRealname）
             function isVipNode(node) {
                 if (!node.allowGroup) return false;
-                const groups = node.allowGroup.split(';').map(g => g.trim());
-                return !groups.includes('default') && !groups.includes('noRealname');
+                var groups = node.allowGroup.split(';').map(function(g) { return g.trim(); });
+                return groups.indexOf('default') === -1 && groups.indexOf('noRealname') === -1;
             }
 
-            let html = '';
-            nodes.forEach(n => {
-                const regionCls = n.region || 'oversea';
-                const regionText = regionLabel[regionCls] || n.region;
-                const onlineCls = n.isOnline ? 'yes' : 'no';
-                const onlineText = n.isOnline ? '在线' : '离线';
-                const desc = n.description || '';
-                const accessible = canAccessNode(n);
-                const vip = isVipNode(n);
-                const disabledCls = accessible ? '' : ' node-disabled';
-                const vipTag = vip ? '<span class="node-vip-tag">VIP</span>' : '';
+            var html = '';
+            nodes.forEach(function(n) {
+                var regionCls = n.region || 'oversea';
+                var regionText = regionLabel[regionCls] || n.region;
+                var onlineCls = n.isOnline ? 'yes' : 'no';
+                var onlineText = n.isOnline ? '在线' : '离线';
+                var desc = n.description || '';
+                var accessible = canAccessNode(n);
+                var vip = isVipNode(n);
+                var disabledCls = accessible ? '' : ' node-disabled';
+                var vipTag = vip ? '<span class="node-vip-tag">VIP</span>' : '';
                 html += '<div class="node-card' + disabledCls + '" data-nodeid="' + n.nodeId + '" data-nodename="' + escapeHtml(n.name) + '" data-accessible="' + accessible + '">' +
                     '<div class="node-name">' + escapeHtml(n.name) + vipTag + '</div>' +
                     '<span class="node-region ' + regionCls + '">' + regionText + '</span>' +
@@ -1447,31 +1475,30 @@ select.form-input { cursor: pointer; }
             grid.innerHTML = html;
 
             // 点击节点卡片事件 - 跳转到配置表单
-            grid.querySelectorAll('.node-card').forEach(card => {
-                card.addEventListener('click', () => {
+            grid.querySelectorAll('.node-card').forEach(function(card) {
+                card.addEventListener('click', function() {
                     // 检查是否可访问
                     if (card.dataset.accessible !== 'true') {
                         document.getElementById('createResult').textContent = '❌ 该节点为 VIP 节点，当前用户组无权使用';
                         document.getElementById('createResult').style.color = '#ff3b30';
                         return;
                     }
-                    const nodeId = card.dataset.nodeid;
-                    const nodeName = card.dataset.nodename;
+                    var nodeId = card.dataset.nodeid;
+                    var nodeName = card.dataset.nodename;
                     // 记录选中的节点
                     selectedNodeId = nodeId;
                     selectedNodeName = nodeName;
                     document.getElementById('formTitle').textContent = '创建隧道 - ' + nodeName;
                     document.getElementById('createResult').textContent = '';
                     // 切换到表单页面
-                    document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+                    document.querySelectorAll('.page-section').forEach(function(s) { s.classList.remove('active'); });
                     document.getElementById('page-newproxy-form').classList.add('active');
                 });
             });
-
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('nodeGrid').innerHTML = '<div class="loading-row">加载失败: ' + e.message + '</div>';
-        }
-    }
+        });
+    };
 
     // ====== 创建隧道表单逻辑 ======
     let selectedNodeId = null;
@@ -1484,23 +1511,22 @@ select.form-input { cursor: pointer; }
     });
 
     // 获取空闲端口
-    document.getElementById('getFreePortBtn').addEventListener('click', async () => {
+    document.getElementById('getFreePortBtn').addEventListener('click', function() {
         if (!selectedNodeId) {
             document.getElementById('createResult').textContent = '请先选择一个节点';
             return;
         }
-        const protocol = document.getElementById('f_proxyType').value;
-        const btn = document.getElementById('getFreePortBtn');
+        var protocol = document.getElementById('f_proxyType').value;
+        var btn = document.getElementById('getFreePortBtn');
         btn.textContent = '获取中...';
         btn.disabled = true;
-        try {
-            const resp = await fetch('/api/freeport', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ nodeId: Number(selectedNodeId), protocol: protocol })
-
-            });
-            const data = await resp.json();
+        fetch('/api/freeport', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ nodeId: Number(selectedNodeId), protocol: protocol })
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code === 200 && data.data) {
                 document.getElementById('f_remotePort').value = data.data;
                 document.getElementById('createResult').textContent = '获取到空闲端口: ' + data.data;
@@ -1509,63 +1535,64 @@ select.form-input { cursor: pointer; }
                 document.getElementById('createResult').textContent = data.message || '获取失败';
                 document.getElementById('createResult').style.color = '#ff3b30';
             }
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('createResult').textContent = '获取失败: ' + e.message;
             document.getElementById('createResult').style.color = '#ff3b30';
-        }
-        btn.textContent = '获取空闲端口';
-        btn.disabled = false;
+        }).then(function() {
+            btn.textContent = '获取空闲端口';
+            btn.disabled = false;
+        });
     });
 
     // 创建隧道
-    document.getElementById('createProxyBtn').addEventListener('click', async () => {
+    document.getElementById('createProxyBtn').addEventListener('click', function() {
         if (!selectedNodeId) {
             document.getElementById('createResult').textContent = '请先选择一个节点';
             document.getElementById('createResult').style.color = '#ff3b30';
             return;
         }
 
-        const proxyName = document.getElementById('f_proxyName').value.trim();
+        var proxyName = document.getElementById('f_proxyName').value.trim();
         if (!proxyName) {
             document.getElementById('createResult').textContent = '请输入隧道名称';
             document.getElementById('createResult').style.color = '#ff3b30';
             return;
         }
 
-        const proxyType = document.getElementById('f_proxyType').value;
-        const localIp = document.getElementById('f_localIp').value.trim() || '127.0.0.1';
-        const localPort = parseInt(document.getElementById('f_localPort').value);
+        var proxyType = document.getElementById('f_proxyType').value;
+        var localIp = document.getElementById('f_localIp').value.trim() || '127.0.0.1';
+        var localPort = parseInt(document.getElementById('f_localPort').value);
         if (!localPort) {
             document.getElementById('createResult').textContent = '请输入本地端口';
             document.getElementById('createResult').style.color = '#ff3b30';
             return;
         }
 
-        const remotePort = document.getElementById('f_remotePort').value ? parseInt(document.getElementById('f_remotePort').value) : 0;
+        var remotePort = document.getElementById('f_remotePort').value ? parseInt(document.getElementById('f_remotePort').value) : 0;
 
-        const domain = document.getElementById('f_domain').value.trim();
-        const accessKey = document.getElementById('f_accessKey').value.trim();
-        const hostHeaderRewrite = document.getElementById('f_hostHeaderRewrite').value.trim();
-        const httpPlugin = document.getElementById('f_httpPlugin').value;
-        const transportProtocol = document.getElementById('f_transportProtocol').value.trim();
-        const httpUser = document.getElementById('f_httpUser').value.trim();
-        const httpPassword = document.getElementById('f_httpPassword').value.trim();
-        const crtPath = document.getElementById('f_crtPath').value.trim();
-        const keyPath = document.getElementById('f_keyPath').value.trim();
-        const locations = document.getElementById('f_locations').value.trim();
-        const proxyProtocolVersion = document.getElementById('f_proxyProtocolVersion').value.trim();
-        const useEncryption = document.getElementById('f_useEncryption').checked;
-        const useCompression = document.getElementById('f_useCompression').checked;
+        var domain = document.getElementById('f_domain').value.trim();
+        var accessKey = document.getElementById('f_accessKey').value.trim();
+        var hostHeaderRewrite = document.getElementById('f_hostHeaderRewrite').value.trim();
+        var httpPlugin = document.getElementById('f_httpPlugin').value;
+        var transportProtocol = document.getElementById('f_transportProtocol').value.trim();
+        var httpUser = document.getElementById('f_httpUser').value.trim();
+        var httpPassword = document.getElementById('f_httpPassword').value.trim();
+        var crtPath = document.getElementById('f_crtPath').value.trim();
+        var keyPath = document.getElementById('f_keyPath').value.trim();
+        var locations = document.getElementById('f_locations').value.trim();
+        var proxyProtocolVersion = document.getElementById('f_proxyProtocolVersion').value.trim();
+        var useEncryption = document.getElementById('f_useEncryption').checked;
+        var useCompression = document.getElementById('f_useCompression').checked;
 
         // domain 需要包装为 JSON 数组字符串格式: '["domain1","domain2"]'
-        let domainStr = domain || '';
-        if (domainStr && !domainStr.startsWith('[')) {
+        var domainStr = domain || '';
+        if (domainStr && domainStr.indexOf('[') !== 0) {
             // 将单个域名或多个逗号分隔的域名包装为 JSON 数组字符串
-            const domains = domainStr.split(',').map(d => d.trim()).filter(d => d);
+            var domains = domainStr.split(',').map(function(d) { return d.trim(); }).filter(function(d) { return d; });
             domainStr = JSON.stringify(domains);
         }
 
-        const body = {
+        var body = {
             nodeId: Number(selectedNodeId),
             proxyName: proxyName,
             proxyType: proxyType,
@@ -1585,50 +1612,49 @@ select.form-input { cursor: pointer; }
             httpPassword: httpPassword || ''
         };
 
-
-        const btn = document.getElementById('createProxyBtn');
+        var btn = document.getElementById('createProxyBtn');
         btn.textContent = '创建中...';
         btn.disabled = true;
         document.getElementById('createResult').textContent = '';
 
-        try {
-            const resp = await fetch('/api/newproxy', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(body)
-            });
-            const data = await resp.json();
+        fetch('/api/newproxy', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(body)
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code === 200) {
                 document.getElementById('createResult').textContent = '✅ 隧道创建成功！';
                 document.getElementById('createResult').style.color = '#34c759';
                 // 刷新隧道列表
                 loadProxyList();
                 // 跳转到隧道概览页面
-                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                document.querySelectorAll('.nav-item').forEach(function(n) { n.classList.remove('active'); });
                 document.querySelector('.nav-item[data-page="tunnels"]').classList.add('active');
-                document.querySelectorAll('.page-section').forEach(s => s.classList.remove('active'));
+                document.querySelectorAll('.page-section').forEach(function(s) { s.classList.remove('active'); });
                 document.getElementById('page-tunnels').classList.add('active');
                 return;
             } else {
-
                 document.getElementById('createResult').textContent = '❌ ' + (data.message || '创建失败');
                 document.getElementById('createResult').style.color = '#ff3b30';
             }
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('createResult').textContent = '❌ 请求失败: ' + e.message;
             document.getElementById('createResult').style.color = '#ff3b30';
-        }
-        btn.textContent = '创建隧道';
-        btn.disabled = false;
+        }).then(function() {
+            btn.textContent = '创建隧道';
+            btn.disabled = false;
+        });
     });
 
     // ====== 节点状态页面 ======
     let serverStatusData = []; // 缓存所有节点状态数据
 
-    async function loadServerStatus() {
-        try {
-            const resp = await fetch('/api/getserver');
-            const data = await resp.json();
+    var loadServerStatus = function() {
+        fetch('/api/getserver').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code !== 200 || !data.data) {
                 document.getElementById('serverStatusBody').innerHTML = '<tr><td colspan="11" class="loading-row">获取节点状态失败</td></tr>';
                 return;
@@ -1636,10 +1662,10 @@ select.form-input { cursor: pointer; }
             serverStatusData = data.data || [];
             document.getElementById('serverStatusCount').textContent = serverStatusData.length + ' 个节点';
             renderServerStatus('');
-        } catch (e) {
+        }).catch(function(e) {
             document.getElementById('serverStatusBody').innerHTML = '<tr><td colspan="11" class="loading-row">加载失败: ' + e.message + '</td></tr>';
-        }
-    }
+        });
+    };
 
     function renderServerStatus(filter) {
         const tbody = document.getElementById('serverStatusBody');
@@ -1925,53 +1951,55 @@ select.form-input { cursor: pointer; }
     }
 
     // ====== 在此启动隧道 ======
-    async function handleStartProxy(proxyId, proxyName) {
-        const ok = await showConfirm('启动隧道', '确定要启动隧道 "' + proxyName + '" 吗？\n将获取配置并通过 frpc 启动。');
-        if (!ok) return;
-        showToast('正在获取配置并启动...', 'info');
-        try {
-            const resp = await fetch('/api/startproxy', {
+    var handleStartProxy = function(proxyId, proxyName) {
+        showConfirm('启动隧道', '确定要启动隧道 "' + proxyName + '" 吗？\n将获取配置并通过 frpc 启动。').then(function(ok) {
+            if (!ok) return;
+            showToast('正在获取配置并启动...', 'info');
+            fetch('/api/startproxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ proxyId: proxyId })
+            }).then(function(resp) {
+                return resp.json();
+            }).then(function(data) {
+                if (data.code === 200) {
+                    showToast('✅ 启动成功: ' + proxyName, 'success');
+                    loadProxyList();
+                } else {
+                    showToast('❌ ' + (data.message || '启动失败'), 'error');
+                }
+            }).catch(function(e) {
+                showToast('❌ 请求失败: ' + e.message, 'error');
             });
-            const data = await resp.json();
-            if (data.code === 200) {
-                showToast('✅ 启动成功: ' + proxyName, 'success');
-                loadProxyList(); // 刷新隧道状态
-            } else {
-                showToast('❌ ' + (data.message || '启动失败'), 'error');
-            }
-        } catch (e) {
-            showToast('❌ 请求失败: ' + e.message, 'error');
-        }
-    }
+        });
+    };
 
     // ====== 关闭隧道 ======
-    async function handleStopProxy(proxyId, proxyName) {
-        const ok = await showConfirm('关闭隧道', '确定要关闭隧道 "' + proxyName + '" 吗？\n将停止 frpc 客户端。');
-        if (!ok) return;
-        showToast('正在关闭隧道...', 'info');
-        try {
-            const resp = await fetch('/api/stopproxy', {
+    var handleStopProxy = function(proxyId, proxyName) {
+        showConfirm('关闭隧道', '确定要关闭隧道 "' + proxyName + '" 吗？\n将停止 frpc 客户端。').then(function(ok) {
+            if (!ok) return;
+            showToast('正在关闭隧道...', 'info');
+            fetch('/api/stopproxy', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ proxyId: proxyId })
+            }).then(function(resp) {
+                return resp.json();
+            }).then(function(data) {
+                if (data.code === 200) {
+                    showToast('✅ 已关闭: ' + proxyName, 'success');
+                    loadProxyList();
+                } else {
+                    showToast('❌ ' + (data.message || '关闭失败'), 'error');
+                }
+            }).catch(function(e) {
+                showToast('❌ 请求失败: ' + e.message, 'error');
             });
-            const data = await resp.json();
-            if (data.code === 200) {
-                showToast('✅ 已关闭: ' + proxyName, 'success');
-                loadProxyList(); // 刷新隧道状态
-            } else {
-                showToast('❌ ' + (data.message || '关闭失败'), 'error');
-            }
-        } catch (e) {
-            showToast('❌ 请求失败: ' + e.message, 'error');
-        }
-    }
+        });
+    };
 
     // 处理隧道操作
-    async function handleProxyAction(action, proxyId, proxyName) {
+    var handleProxyAction = function(action, proxyId, proxyName) {
         switch (action) {
             case 'start': {
                 handleStartProxy(proxyId, proxyName);
@@ -1988,77 +2016,79 @@ select.form-input { cursor: pointer; }
                 showEditProxyForm(proxyId);
                 break;
             case 'kick': {
-                const ok = await showConfirm('强制下线', '确定要强制下线隧道 "' + proxyName + '" 吗？', true);
-                if (!ok) break;
-                try {
-                    const resp = await fetch('/api/kickproxy', {
+                showConfirm('强制下线', '确定要强制下线隧道 "' + proxyName + '" 吗？', true).then(function(ok) {
+                    if (!ok) return;
+                    fetch('/api/kickproxy', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ proxyId: proxyId })
+                    }).then(function(resp) {
+                        return resp.json();
+                    }).then(function(data) {
+                        if (data.code === 200) {
+                            showToast('已强制下线', 'success');
+                            loadProxyList();
+                        } else {
+                            showToast(data.message || '操作失败', 'error');
+                        }
+                    }).catch(function(e) {
+                        showToast('请求失败: ' + e.message, 'error');
                     });
-                    const data = await resp.json();
-                    if (data.code === 200) {
-                        showToast('已强制下线', 'success');
-                        loadProxyList();
-                    } else {
-                        showToast(data.message || '操作失败', 'error');
-                    }
-                } catch (e) {
-                    showToast('请求失败: ' + e.message, 'error');
-                }
+                });
                 break;
             }
             case 'toggle': {
-                // 查找当前隧道的 isDisabled 状态
-                const p = cachedProxies.find(x => x.proxyId === proxyId);
-                const currentlyDisabled = p ? p.isDisabled : false;
-                const title = currentlyDisabled ? '启用隧道' : '禁用隧道';
-                const msg = currentlyDisabled
+                var p = cachedProxies.find(function(x) { return x.proxyId === proxyId; });
+                var currentlyDisabled = p ? p.isDisabled : false;
+                var title = currentlyDisabled ? '启用隧道' : '禁用隧道';
+                var msg = currentlyDisabled
                     ? '确定要启用隧道 "' + proxyName + '" 吗？'
                     : '确定要禁用隧道 "' + proxyName + '" 吗？';
-                const ok = await showConfirm(title, msg);
-                if (!ok) break;
-                try {
-                    const resp = await fetch('/api/banunproxy', {
+                showConfirm(title, msg).then(function(ok) {
+                    if (!ok) return;
+                    fetch('/api/banunproxy', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ proxyId: proxyId, isDisabled: !currentlyDisabled })
+                    }).then(function(resp) {
+                        return resp.json();
+                    }).then(function(data) {
+                        if (data.code === 200) {
+                            showToast(currentlyDisabled ? '已启用' : '已禁用', 'success');
+                            loadProxyList();
+                        } else {
+                            showToast(data.message || '操作失败', 'error');
+                        }
+                    }).catch(function(e) {
+                        showToast('请求失败: ' + e.message, 'error');
                     });
-                    const data = await resp.json();
-                    if (data.code === 200) {
-                        showToast(currentlyDisabled ? '已启用' : '已禁用', 'success');
-                        loadProxyList();
-                    } else {
-                        showToast(data.message || '操作失败', 'error');
-                    }
-                } catch (e) {
-                    showToast('请求失败: ' + e.message, 'error');
-                }
+                });
                 break;
             }
             case 'delete': {
-                const ok = await showConfirm('删除隧道', '⚠️ 确定要删除隧道 "' + proxyName + '" 吗？此操作不可恢复！', true);
-                if (!ok) break;
-                try {
-                    const resp = await fetch('/api/delproxy', {
+                showConfirm('删除隧道', '⚠️ 确定要删除隧道 "' + proxyName + '" 吗？此操作不可恢复！', true).then(function(ok) {
+                    if (!ok) return;
+                    fetch('/api/delproxy', {
                         method: 'POST',
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ proxyId: proxyId })
+                    }).then(function(resp) {
+                        return resp.json();
+                    }).then(function(data) {
+                        if (data.code === 200) {
+                            showToast('已删除', 'success');
+                            loadProxyList();
+                        } else {
+                            showToast(data.message || '操作失败', 'error');
+                        }
+                    }).catch(function(e) {
+                        showToast('请求失败: ' + e.message, 'error');
                     });
-                    const data = await resp.json();
-                    if (data.code === 200) {
-                        showToast('已删除', 'success');
-                        loadProxyList();
-                    } else {
-                        showToast(data.message || '操作失败', 'error');
-                    }
-                } catch (e) {
-                    showToast('请求失败: ' + e.message, 'error');
-                }
+                });
                 break;
             }
         }
-    }
+    };
 
     // ====== 编辑隧道弹窗 ======
     function showEditProxyForm(proxyId) {
@@ -2160,37 +2190,37 @@ select.form-input { cursor: pointer; }
         });
 
         // 保存按钮事件
-        document.getElementById('saveEditBtn').addEventListener('click', async () => {
-            const newName = document.getElementById('e_proxyName').value.trim();
+        document.getElementById('saveEditBtn').addEventListener('click', function() {
+            var newName = document.getElementById('e_proxyName').value.trim();
             if (!newName) {
                 document.getElementById('editResult').textContent = '请输入隧道名称';
                 document.getElementById('editResult').style.color = '#ff3b30';
                 return;
             }
 
-            const newType = document.getElementById('e_proxyType').value;
-            const newLocalIp = document.getElementById('e_localIp').value.trim() || '127.0.0.1';
-            const newLocalPort = parseInt(document.getElementById('e_localPort').value);
+            var newType = document.getElementById('e_proxyType').value;
+            var newLocalIp = document.getElementById('e_localIp').value.trim() || '127.0.0.1';
+            var newLocalPort = parseInt(document.getElementById('e_localPort').value);
             if (!newLocalPort) {
                 document.getElementById('editResult').textContent = '请输入本地端口';
                 document.getElementById('editResult').style.color = '#ff3b30';
                 return;
             }
-            const newRemotePort = parseInt(document.getElementById('e_remotePort').value) || 0;
-            const newDomain = document.getElementById('e_domain').value.trim();
-            const newHostHeaderRewrite = document.getElementById('e_hostHeaderRewrite').value.trim();
-            const newUseEncryption = document.getElementById('e_useEncryption').checked;
-            const newUseCompression = document.getElementById('e_useCompression').checked;
-            const newProxyProtocolVersion = document.getElementById('e_proxyProtocolVersion').value.trim();
+            var newRemotePort = parseInt(document.getElementById('e_remotePort').value) || 0;
+            var newDomain = document.getElementById('e_domain').value.trim();
+            var newHostHeaderRewrite = document.getElementById('e_hostHeaderRewrite').value.trim();
+            var newUseEncryption = document.getElementById('e_useEncryption').checked;
+            var newUseCompression = document.getElementById('e_useCompression').checked;
+            var newProxyProtocolVersion = document.getElementById('e_proxyProtocolVersion').value.trim();
 
             // domain 包装为 JSON 数组字符串
-            let domainStr = newDomain || '';
-            if (domainStr && !domainStr.startsWith('[')) {
-                const domains = domainStr.split(',').map(d => d.trim()).filter(d => d);
+            var domainStr = newDomain || '';
+            if (domainStr && domainStr.indexOf('[') !== 0) {
+                var domains = domainStr.split(',').map(function(d) { return d.trim(); }).filter(function(d) { return d; });
                 domainStr = JSON.stringify(domains);
             }
 
-            const body = {
+            var body = {
                 proxyId: p.proxyId,
                 proxyName: newName,
                 proxyType: newType,
@@ -2217,22 +2247,22 @@ select.form-input { cursor: pointer; }
                 responseHeaders: p.responseHeaders || {}
             };
 
-            const btn = document.getElementById('saveEditBtn');
+            var btn = document.getElementById('saveEditBtn');
             btn.textContent = '保存中...';
             btn.disabled = true;
             document.getElementById('editResult').textContent = '';
 
-            try {
-                const resp = await fetch('/api/updateproxy', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(body)
-                });
-                const data = await resp.json();
+            fetch('/api/updateproxy', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(body)
+            }).then(function(resp) {
+                return resp.json();
+            }).then(function(data) {
                 if (data.code === 200) {
                     document.getElementById('editResult').textContent = '✅ 更新成功！';
                     document.getElementById('editResult').style.color = '#34c759';
-                    setTimeout(() => {
+                    setTimeout(function() {
                         modal.remove();
                         loadProxyList();
                     }, 1000);
@@ -2240,18 +2270,20 @@ select.form-input { cursor: pointer; }
                     document.getElementById('editResult').textContent = '❌ ' + (data.message || '更新失败');
                     document.getElementById('editResult').style.color = '#ff3b30';
                 }
-            } catch (e) {
+            }).catch(function(e) {
                 document.getElementById('editResult').textContent = '❌ 请求失败: ' + e.message;
                 document.getElementById('editResult').style.color = '#ff3b30';
-            }
-            btn.textContent = '保存修改';
-            btn.disabled = false;
+            }).then(function() {
+                btn.textContent = '保存修改';
+                btn.disabled = false;
+            });
         });
     }
 
     // ====== 签到功能（自动 PoW 求解） ======
-    async function doSign() {
-        const btn = document.getElementById('signBtn');
+    // 注意：不使用 async/await 以兼容 JavaFX WebView 旧版 WebKit
+    function doSign() {
+        var btn = document.getElementById('signBtn');
         if (btn.disabled) return;
 
         // 禁用按钮，显示进度
@@ -2260,15 +2292,13 @@ select.form-input { cursor: pointer; }
         btn.style.background = 'rgba(255,149,0,0.3)';
         btn.style.color = '#ff9500';
 
-        try {
-            // 直接调用签到 API，后端会自动执行 PoW 求解
-            const resp = await fetch('/api/sign', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({})
-            });
-            const data = await resp.json();
-
+        fetch('/api/sign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({})
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code === 200) {
                 btn.textContent = '✅ 已签到';
                 btn.style.background = 'rgba(52,199,89,0.2)';
@@ -2280,7 +2310,7 @@ select.form-input { cursor: pointer; }
                 btn.style.background = 'rgba(255,59,48,0.2)';
                 btn.style.color = '#ff3b30';
                 // 3 秒后恢复
-                setTimeout(() => {
+                setTimeout(function() {
                     btn.disabled = false;
                     btn.textContent = '签到';
                     btn.style.background = 'var(--primary)';
@@ -2288,18 +2318,18 @@ select.form-input { cursor: pointer; }
                     btn.style.cursor = 'pointer';
                 }, 3000);
             }
-        } catch (e) {
+        }).catch(function(e) {
             btn.textContent = '❌ 请求失败';
             btn.style.background = 'rgba(255,59,48,0.2)';
             btn.style.color = '#ff3b30';
-            setTimeout(() => {
+            setTimeout(function() {
                 btn.disabled = false;
                 btn.textContent = '签到';
                 btn.style.background = 'var(--primary)';
                 btn.style.color = '#fff';
                 btn.style.cursor = 'pointer';
             }, 3000);
-        }
+        });
     }
 
 
@@ -2308,47 +2338,49 @@ select.form-input { cursor: pointer; }
     const autoSignSlider = document.querySelector('#autoSignToggle + .toggle-slider');
 
     // 切换自动签到的事件处理函数
-    let autoSignChanging = false;
-    autoSignToggle.addEventListener('change', async function() {
+    var autoSignChanging = false;
+    autoSignToggle.addEventListener('change', function() {
         if (autoSignChanging) return;
         autoSignChanging = true;
-        const enabled = this.checked;
+        var enabled = this.checked;
         console.log('[autoSign] change 事件触发, this.checked=' + this.checked + ', enabled=' + enabled);
-        try {
-            const resp = await fetch('/api/autosign', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ enabled: enabled })
-            });
-            const data = await resp.json();
+        fetch('/api/autosign', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ enabled: enabled })
+        }).then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             console.log('[autoSign] 后端返回:', data);
             if (data.code === 200) {
                 showToast(data.message, enabled ? 'success' : 'info');
             } else {
                 showToast(data.message || '操作失败', 'error');
-                this.checked = !enabled; // 恢复状态
+                autoSignToggle.checked = !enabled; // 恢复状态
             }
-        } catch (e) {
+        }).catch(function(e) {
             console.error('[autoSign] 请求失败:', e);
             showToast('请求失败: ' + e.message, 'error');
-            this.checked = !enabled; // 恢复状态
-        }
-        autoSignChanging = false;
+            autoSignToggle.checked = !enabled; // 恢复状态
+        }).then(function() {
+            autoSignChanging = false;
+        });
     });
 
     // 加载自动签到状态（先移除事件监听避免误触发）
-    async function loadAutoSignStatus() {
-        try {
-            const resp = await fetch('/api/autosign');
-            const data = await resp.json();
+    // 注意：不使用 async/await 以兼容 JavaFX WebView 旧版 WebKit
+    function loadAutoSignStatus() {
+        fetch('/api/autosign').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
             if (data.code === 200) {
                 autoSignChanging = true;
                 autoSignToggle.checked = data.enabled === true;
                 autoSignChanging = false;
             }
-        } catch (e) {
+        }).catch(function(e) {
             console.error('加载自动签到状态失败:', e);
-        }
+        });
     }
     loadAutoSignStatus();
 
@@ -2359,20 +2391,21 @@ select.form-input { cursor: pointer; }
     loadServerStatus();
 
     // ====== EULA 协议检查 ======
-    const checkEula = async () => {
-        try {
-            const res = await fetch('/api/eula');
-            const data = await res.json();
+    // 注意：不使用 async/await 以兼容 JavaFX WebView 旧版 WebKit
+    function checkEula() {
+        fetch('/api/eula').then(function(res) {
+            return res.json();
+        }).then(function(data) {
             if (data.code === 200 && data.eula === "null") {
                 showEulaModal();
             }
-        } catch (e) {}
-    };
+        }).catch(function(e) {});
+    }
 
-    const showEulaModal = () => {
-        const overlay = document.createElement('div');
+    function showEulaModal() {
+        var overlay = document.createElement('div');
         overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:100000;background:rgba(0,0,0,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:flex;align-items:center;justify-content:center;';
-        const modal = document.createElement('div');
+        var modal = document.createElement('div');
         modal.style.cssText = 'background:var(--bg-base);border:1px solid var(--glass-border);border-radius:28px;width:90%;max-width:640px;max-height:85vh;display:flex;flex-direction:column;box-shadow:0 20px 60px rgba(0,0,0,0.5);transform:scale(0.9);opacity:0;transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);overflow:hidden;';
         modal.innerHTML =
             '<div style="padding:28px 32px 0;flex-shrink:0;">' +
@@ -2408,16 +2441,16 @@ select.form-input { cursor: pointer; }
             '</div>';
         overlay.appendChild(modal);
         document.body.appendChild(overlay);
-        requestAnimationFrame(() => {
+        requestAnimationFrame(function() {
             modal.style.transform = 'scale(1)';
             modal.style.opacity = '1';
         });
-        modal.querySelector('.eula-reject').addEventListener('click', async () => {
-            try { await fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'false' }) }); } catch (e) {}
+        modal.querySelector('.eula-reject').addEventListener('click', function() {
+            fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'false' }) }).then(function() {}).catch(function(e) {});
             overlay.remove();
         });
-        modal.querySelector('.eula-accept').addEventListener('click', async () => {
-            try { await fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'true' }) }); } catch (e) {}
+        modal.querySelector('.eula-accept').addEventListener('click', function() {
+            fetch('/api/eula', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ eula: 'true' }) }).then(function() {}).catch(function(e) {});
             overlay.remove();
         });
     };
@@ -2441,14 +2474,18 @@ select.form-input { cursor: pointer; }
     }
 
     // 摇号器动画 - 随机变换
+    // 返回 { promise, stop } 对象，stop() 可以提前停止动画
     function startShakerAnimation(displayEl, textEl, type, duration) {
         const isCode = type === 'code';
         displayEl.classList.add('spinning');
         const interval = 60; // ms per frame
         let elapsed = 0;
+        let timer = null;
+        let resolveFn = null;
 
-        return new Promise(resolve => {
-            const timer = setInterval(() => {
+        const promise = new Promise(resolve => {
+            resolveFn = resolve;
+            timer = setInterval(() => {
                 elapsed += interval;
                 if (isCode) {
                     textEl.textContent = generateRandomCode();
@@ -2462,11 +2499,24 @@ select.form-input { cursor: pointer; }
 
                 if (elapsed >= duration) {
                     clearInterval(timer);
+                    timer = null;
                     displayEl.classList.remove('spinning');
                     resolve();
                 }
             }, interval);
         });
+
+        // 返回 promise，并附加 stop 方法
+        promise.stop = function() {
+            if (timer !== null) {
+                clearInterval(timer);
+                timer = null;
+                displayEl.classList.remove('spinning');
+                if (resolveFn) resolveFn();
+            }
+        };
+
+        return promise;
     }
 
     // 奖品池（用于概率抽奖）
@@ -2500,138 +2550,315 @@ select.form-input { cursor: pointer; }
     let lotteryHistory = [];
 
     // 执行抽奖
-    async function doLottery(count) {
-        const singleBtn = document.getElementById('lotterySingleBtn');
-        const tenBtn = document.getElementById('lotteryTenBtn');
-        const codeDisplay = document.getElementById('codeDisplay');
-        const codeText = document.getElementById('codeText');
-        const numDisplay = document.getElementById('numDisplay');
-        const numText = document.getElementById('numText');
-        const resultRows = document.getElementById('lotteryResultRows');
+    // 注意：不使用 async/await 以兼容 JavaFX WebView 旧版 WebKit
+    function doLottery(count) {
+        var singleBtn = document.getElementById('lotterySingleBtn');
+        var tenBtn = document.getElementById('lotteryTenBtn');
+        var codeDisplay = document.getElementById('codeDisplay');
+        var codeText = document.getElementById('codeText');
+        var numDisplay = document.getElementById('numDisplay');
+        var numText = document.getElementById('numText');
+        var resultRows = document.getElementById('lotteryResultRows');
 
         // 禁用按钮
         singleBtn.disabled = true;
         tenBtn.disabled = true;
+        singleBtn.textContent = '抽奖中...';
+        tenBtn.textContent = '抽奖中...';
 
         // 清空之前的结果
-        resultRows.innerHTML = '';
-
-        // 预生成 count 个抽奖结果
-        const results = [];
-        for (let i = 0; i < count; i++) {
-            results.push(rollLottery());
-        }
-
-        // 生成 count 行数据，每行要么是优惠码要么是流量
-        const rowData = [];
-        for (let i = 0; i < count; i++) {
-            const prize = results[i];
-            if (prize.name.includes('优惠码')) {
-                // 抽到优惠码：左边显示优惠码，右边显示 "-"
-                const code = generateRandomCode();
-                rowData.push({ code: code, traffic: '-', trafficClass: 'lose', prize: prize, isCoupon: true });
-            } else {
-                // 抽到流量包：左边显示 "-"，右边显示流量 GB
-                const match = prize.name.match(/(\d+)\s*GB/);
-                const gb = match ? parseInt(match[1]) : 0;
-                rowData.push({ code: '-', traffic: gb + ' GB', trafficClass: gb > 0 ? 'win' : 'lose', prize: prize, isCoupon: false });
-            }
-        }
-
-        // 摇号器动画 + 逐行输出结果
-        // 单抽：摇 1.5 秒后显示结果
-        // 十连抽：摇 15 秒，每秒出一个结果
-        const totalDuration = count === 1 ? 1500 : 15000;
-        const intervalTime = count === 1 ? 1500 : 1500; // 每秒出一个
+        resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:var(--text-sec);font-size:14px;">🎲 正在抽奖...</div>';
 
         // 启动摇号器动画
-        const codePromise = startShakerAnimation(codeDisplay, codeText, 'code', totalDuration);
-        const numPromise = startShakerAnimation(numDisplay, numText, 'num', totalDuration);
+        var totalDuration = count === 1 ? 1500 : (count * 1500);
+        var codePromise = startShakerAnimation(codeDisplay, codeText, 'code', totalDuration);
+        var numPromise = startShakerAnimation(numDisplay, numText, 'num', totalDuration);
 
-        // 逐秒输出结果
-        let currentIndex = 0;
-        const outputTimer = setInterval(() => {
-            if (currentIndex < rowData.length) {
-                const row = rowData[currentIndex];
-                const badgeClass = row.isCoupon ? 'coupon' : (row.trafficClass === 'win' ? 'traffic' : 'none');
-                const badgeText = row.isCoupon ? '优惠码' : (row.trafficClass === 'win' ? '流量' : '未中');
-                const rowHtml = '<div class="lottery-result-row" style="animation:resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">' +
-                    '<span class="row-code">' + row.code + '</span>' +
-                    '<span class="row-traffic ' + row.trafficClass + '">' + row.traffic + ' <span class="row-badge ' + badgeClass + '">' + badgeText + '</span></span>' +
-                    '</div>';
-                resultRows.insertAdjacentHTML('beforeend', rowHtml);
-                currentIndex++;
+        // 存储所有抽奖结果
+        var allResults = [];
+        var currentDrawIndex = 0;
+
+        // 清空结果区域
+        resultRows.innerHTML = '';
+
+        // 定义单次抽奖函数
+        var doSingleDraw = function() {
+            if (currentDrawIndex >= count) {
+                // 所有抽奖完成，等待动画结束后显示最终结果
+                Promise.all([codePromise, numPromise]).then(function() {
+                    finishLottery(count);
+                });
+                return;
             }
-        }, intervalTime);
 
-        // 等待动画完成
-        await Promise.all([codePromise, numPromise]);
 
-        // 动画结束后停止定时器，确保所有结果都已输出
-        clearInterval(outputTimer);
+            // 调用后端 API 进行单次抽奖（每次只抽 1 个）
+            fetch('/api/luckydraw', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ count: 1 })
+            }).then(function(resp) {
+                return resp.json();
+            }).then(function(data) {
+                if (data.code !== 200) {
+                    // 抽奖失败：立即停止摇号器动画（无论何种原因）
+                    if (codePromise && typeof codePromise.stop === 'function') codePromise.stop();
+                    if (numPromise && typeof numPromise.stop === 'function') numPromise.stop();
 
-        // 如果还有未输出的结果（理论上不会），补全
-        while (currentIndex < rowData.length) {
-            const row = rowData[currentIndex];
-            const badgeClass = row.isCoupon ? 'coupon' : (row.trafficClass === 'win' ? 'traffic' : 'none');
-            const badgeText = row.isCoupon ? '优惠码' : (row.trafficClass === 'win' ? '流量' : '未中');
-            const rowHtml = '<div class="lottery-result-row" style="animation:resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">' +
-                '<span class="row-code">' + row.code + '</span>' +
-                '<span class="row-traffic ' + row.trafficClass + '">' + row.traffic + ' <span class="row-badge ' + badgeClass + '">' + badgeText + '</span></span>' +
-                '</div>';
-            resultRows.insertAdjacentHTML('beforeend', rowHtml);
-            currentIndex++;
-        }
+                    // 重置摇号器显示
+                    codeText.textContent = '--------------------';
+                    numText.textContent = '000';
 
-        // 显示摇号器最终结果（显示最后一个结果）
-        const lastRow = rowData[rowData.length - 1];
-        codeText.textContent = lastRow.code;
-        codeText.style.animation = 'none';
-        codeText.offsetHeight;
-        codeText.style.animation = 'charFlip 0.2s ease';
+                    // 显示错误信息
+                    resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:#ff3b30;font-size:14px;">❌ ' + (data.message || '抽奖失败') + '</div>';
 
-        numText.textContent = lastRow.isCoupon ? '---' : lastRow.traffic.replace(' GB', '');
-        numText.style.animation = 'none';
-        numText.offsetHeight;
-        numText.style.animation = 'charFlip 0.2s ease';
+                    // 恢复按钮
+                    singleBtn.disabled = false;
+                    tenBtn.disabled = false;
+                    singleBtn.textContent = '单抽 (10 GB)';
+                    tenBtn.textContent = '十连抽 (100 GB)';
 
-        // 统计抽到的奖品
-        const prizeCounts = {};
-        results.forEach(r => {
-            prizeCounts[r.name] = (prizeCounts[r.name] || 0) + 1;
-        });
-        const prizeSummary = Object.entries(prizeCounts)
-            .map(([name, cnt]) => name + (cnt > 1 ? ' x' + cnt : ''))
-            .join('、');
+                    // 刷新抽奖状态（更新剩余次数）
+                    loadLuckyDrawStatus();
+                    return;
+                }
 
-        // 记录历史
-        const now = new Date();
-        const timeStr = now.getHours().toString().padStart(2, '0') + ':' + now.getMinutes().toString().padStart(2, '0');
-        lotteryHistory.push({
-            time: timeStr,
-            count: count,
-            summary: prizeSummary
-        });
-        if (lotteryHistory.length > 20) lotteryHistory.shift();
 
-        // 显示历史记录
-        const historyDiv = document.getElementById('lotteryHistory');
-        const historyList = document.getElementById('historyList');
-        historyDiv.style.display = 'block';
-        let historyHtml = '';
-        for (let i = lotteryHistory.length - 1; i >= 0; i--) {
-            const h = lotteryHistory[i];
-            historyHtml += '<div class="history-item"><span class="history-time">' + h.time + '</span> ' +
-                (h.count === 1 ? '单抽' : '十连') + ': ' + h.summary + '</div>';
-        }
-        historyList.innerHTML = historyHtml;
+                // 抽奖成功，解析返回的奖品数据
+                var rawData = data.data;
+                var prizes = [];
+                if (Array.isArray(rawData)) {
+                    prizes = rawData;
+                } else if (rawData && rawData.type) {
+                    prizes = [rawData];
+                } else {
+                    prizes = [];
+                }
+
+                if (prizes.length === 0) {
+                    resultRows.innerHTML = '<div style="text-align:center;padding:20px;color:#ff3b30;font-size:14px;">❌ 未获取到抽奖结果</div>';
+                    singleBtn.disabled = false;
+                    tenBtn.disabled = false;
+                    singleBtn.textContent = '单抽 (10 GB)';
+                    tenBtn.textContent = '十连抽 (100 GB)';
+                    return;
+                }
+
+                // 将后端返回的奖品转换为前端格式
+                var results = [];
+                for (var i = 0; i < prizes.length; i++) {
+                    var p = prizes[i];
+                    if (p.type === 'coupon') {
+                        var couponCode = '';
+                        if (p.prize && p.prize.indexOf(':') !== -1) {
+                            couponCode = p.prize.split(':')[1].trim();
+                        } else {
+                            couponCode = p.prize || 'UNKNOWN';
+                        }
+                        results.push({ name: '🎫 优惠码', prob: 0, detail: couponCode, isCoupon: true, value: couponCode });
+                    } else if (p.type === 'traffic') {
+                        var trafficGB = p.value || 0;
+                        results.push({ name: '📦 ' + trafficGB + ' GB 流量', prob: 0, detail: trafficGB + ' GB', isCoupon: false, value: trafficGB });
+                    } else {
+                        results.push({ name: '📦 流量', prob: 0, detail: '未知', isCoupon: false, value: 0 });
+                    }
+                }
+
+                // 清空"正在抽奖..."提示
+                resultRows.innerHTML = '';
+
+                // 刷新抽奖状态（更新剩余次数）
+                loadLuckyDrawStatus();
+
+                // 生成当前这次抽奖的行数据（每次只抽 1 个，所以 results 只有 1 个元素）
+                var rowData = [];
+                for (var i = 0; i < results.length; i++) {
+                    var prize = results[i];
+                    if (!prize) continue;
+                    if (prize.name.indexOf('优惠码') !== -1) {
+                        var code = generateRandomCode();
+                        rowData.push({ code: code, traffic: '-', trafficClass: 'lose', prize: prize, isCoupon: true });
+                    } else {
+                        var match = prize.name.match(/(\d+)\s*GB/);
+                        var gb = match ? parseInt(match[1], 10) : 0;
+                        rowData.push({ code: '-', traffic: gb + ' GB', trafficClass: gb > 0 ? 'win' : 'lose', prize: prize, isCoupon: false });
+                    }
+                }
+
+                // 将本次结果添加到 allResults
+                for (var i = 0; i < rowData.length; i++) {
+                    allResults.push(rowData[i]);
+                }
+
+                // 输出当前这次的结果到页面
+                for (var i = 0; i < rowData.length; i++) {
+                    var row = rowData[i];
+                    var badgeClass = row.isCoupon ? 'coupon' : (row.trafficClass === 'win' ? 'traffic' : 'none');
+                    var badgeText = row.isCoupon ? '优惠码' : (row.trafficClass === 'win' ? '流量' : '未中');
+                    var rowHtml = '<div class="lottery-result-row" style="animation:resultSlideIn 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);">' +
+                        '<span class="row-code" style="cursor:pointer;" onclick="copyToClipboard(\'' + row.code + '\')" title="点击复制优惠码">' + row.code + '</span>' +
+                        '<span class="row-traffic ' + row.trafficClass + '">' + row.traffic + ' <span class="row-badge ' + badgeClass + '">' + badgeText + '</span></span>' +
+                        '</div>';
+                    resultRows.insertAdjacentHTML('beforeend', rowHtml);
+                }
+
+                // 更新摇号器显示当前这次的结果
+                var lastRow = rowData[rowData.length - 1];
+                if (lastRow) {
+                    codeText.textContent = lastRow.code;
+                    codeText.style.animation = 'none';
+                    void codeText.offsetHeight;
+                    codeText.style.animation = 'charFlip 0.2s ease';
+
+                    numText.textContent = lastRow.isCoupon ? '---' : lastRow.traffic.replace(' GB', '');
+                    numText.style.animation = 'none';
+                    void numText.offsetHeight;
+                    numText.style.animation = 'charFlip 0.2s ease';
+                }
+
+                // 增加索引，准备下一次抽奖
+                currentDrawIndex++;
+
+                // 如果是单抽，直接完成；如果是十连抽，1 秒后继续下一次
+                if (count === 1) {
+                    // 单抽：等待动画结束后完成
+                    Promise.all([codePromise, numPromise]).then(function() {
+                        finishLottery();
+                    });
+                } else {
+                    // 十连抽：1 秒后继续下一次
+                    setTimeout(function() {
+                        doSingleDraw();
+                    }, 1000);
+                }
+            });
+        };
+
+        // 开始第一次抽奖
+        doSingleDraw();
+    }
+
+    // 抽奖完成后的处理
+    function finishLottery(count) {
+        var singleBtn = document.getElementById('lotterySingleBtn');
+        var tenBtn = document.getElementById('lotteryTenBtn');
 
         // 恢复按钮
         singleBtn.disabled = false;
         tenBtn.disabled = false;
+        singleBtn.textContent = '单抽 (10 GB)';
+        tenBtn.textContent = '十连抽 (100 GB)';
+
+        // 记录历史
+        var historyDiv = document.getElementById('lotteryHistory');
+        var historyList = document.getElementById('historyList');
+
+        var now = new Date();
+        var timeStr = padZero(now.getHours()) + ':' + padZero(now.getMinutes());
+        lotteryHistory.push({
+            time: timeStr,
+            count: count || 1,
+            summary: '抽奖完成'
+        });
+        if (lotteryHistory.length > 20) lotteryHistory.shift();
+
+        historyDiv.style.display = 'block';
+        var historyHtml = '';
+        for (var j = lotteryHistory.length - 1; j >= 0; j--) {
+            var h = lotteryHistory[j];
+            historyHtml += '<div class="history-item"><span class="history-time">' + h.time + '</span> ' +
+                (h.count === 1 ? '单抽' : '十连') + ': ' + h.summary + '</div>';
+        }
+        historyList.innerHTML = historyHtml;
     }
 
 
+    // 补零辅助函数
+    function padZero(num) {
+        return num < 10 ? '0' + num : String(num);
+    }
+
+
+
+
+    // ====== 加载抽奖状态（账户流量 & 剩余抽奖次数） ======
+    // 注意：不使用 async/await 以兼容 JavaFX WebView 旧版 WebKit
+    function loadLuckyDrawStatus() {
+        // 获取抽奖状态
+        fetch('/api/luckydrawstatus').then(function(resp) {
+            return resp.json();
+        }).then(function(data) {
+            var remaining = '?';
+            var count = '?';
+            // 兼容多种返回格式：
+            // 格式1: {code:200, data:{count:0, remaining:9}}
+            // 格式2: {code:200, count:0, remaining:9}
+            // 格式3: {count:0, remaining:9}
+            if (data.code === 200 && data.data) {
+                remaining = data.data.remaining !== undefined ? data.data.remaining : '?';
+                count = data.data.count !== undefined ? data.data.count : '?';
+            } else if (data.code === 200) {
+                remaining = data.remaining !== undefined ? data.remaining : '?';
+                count = data.count !== undefined ? data.count : '?';
+            } else if (data.remaining !== undefined) {
+                remaining = data.remaining;
+                count = data.count !== undefined ? data.count : '?';
+            }
+            document.getElementById('luckyDrawRemaining').textContent = remaining;
+            document.getElementById('luckyDrawCount').textContent = count;
+        })['catch'](function(e) {
+            console.error('获取抽奖状态失败:', e);
+            document.getElementById('luckyDrawRemaining').textContent = '获取失败';
+            document.getElementById('luckyDrawCount').textContent = '?';
+        });
+
+        // 从用户数据中获取账户流量（traffic 字段单位是 MB，除以 1024 得到 GB）
+        fetch('/api/userdata').then(function(resp) {
+            return resp.json();
+        }).then(function(userData) {
+            var trafficGB = '获取失败';
+            if (userData.code === 200 && userData.data) {
+                var trafficMB = userData.data.traffic || 0;
+                trafficGB = (trafficMB / 1024).toFixed(2);
+            }
+            document.getElementById('luckyDrawTraffic').textContent = trafficGB + ' GB';
+        })['catch'](function(e) {
+            console.error('获取账户流量失败:', e);
+            document.getElementById('luckyDrawTraffic').textContent = '获取失败';
+        });
+    }
+
+    // ====== 复制到剪贴板 ======
+    function copyToClipboard(text) {
+        if (text === '-' || !text) return;
+        // 使用 Clipboard API
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => {
+                showToast('✅ 已复制: ' + text, 'success');
+            }).catch(() => {
+                // 降级方案
+                fallbackCopy(text);
+            });
+        } else {
+            fallbackCopy(text);
+        }
+    }
+
+    function fallbackCopy(text) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.opacity = '0';
+        document.body.appendChild(textarea);
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showToast('✅ 已复制: ' + text, 'success');
+        } catch (e) {
+            showToast('❌ 复制失败，请手动复制', 'error');
+        }
+        document.body.removeChild(textarea);
+    }
 
     // 切换概率公示
     function toggleProbability() {
@@ -2647,13 +2874,194 @@ select.form-input { cursor: pointer; }
     }
 
 
+    // ====== DEBUG 模式检测 ======
+    // 存储 JavaScript 日志
+    var jsLogs = [];
+    var originalConsoleLog = console.log;
+    var originalConsoleWarn = console.warn;
+    var originalConsoleError = console.error;
+    var originalConsoleInfo = console.info;
+
+    // 重写 console 方法，保存日志
+    console.log = function() {
+        var msg = Array.prototype.join.call(arguments, ' ');
+        jsLogs.push('[LOG] ' + msg);
+        if (originalConsoleLog) originalConsoleLog.apply(console, arguments);
+    };
+    console.warn = function() {
+        var msg = Array.prototype.join.call(arguments, ' ');
+        jsLogs.push('[WARN] ' + msg);
+        if (originalConsoleWarn) originalConsoleWarn.apply(console, arguments);
+    };
+    console.error = function() {
+        var msg = Array.prototype.join.call(arguments, ' ');
+        jsLogs.push('[ERROR] ' + msg);
+        if (originalConsoleError) originalConsoleError.apply(console, arguments);
+    };
+    console.info = function() {
+        var msg = Array.prototype.join.call(arguments, ' ');
+        jsLogs.push('[INFO] ' + msg);
+        if (originalConsoleInfo) originalConsoleInfo.apply(console, arguments);
+    };
+
+    // 捕获未处理的错误
+    window.onerror = function(msg, source, line, col, error) {
+        jsLogs.push('[UNCAUGHT] ' + msg + ' at ' + source + ':' + line);
+        return true;
+    };
+
+    // 检测是否为 DEBUG 模式
+    fetch('/api/clientstatus').then(function(resp) {
+        return resp.json();
+    }).then(function(data) {
+        if (data.code === 200 && data.data && data.data.status === 'DEBUG') {
+            // DEBUG 模式：在右上角添加调试按钮
+            var debugBtn = document.createElement('button');
+            debugBtn.id = 'debugConsoleBtn';
+            debugBtn.textContent = '🐛 调试';
+            debugBtn.style.cssText =
+                'position:fixed;top:12px;right:12px;z-index:99999;' +
+                'padding:8px 16px;border-radius:12px;border:1px solid rgba(255,149,0,0.3);' +
+                'background:rgba(255,149,0,0.15);color:#ff9500;font-size:13px;font-weight:600;' +
+                'cursor:pointer;transition:all 0.2s;backdrop-filter:blur(10px);' +
+                '-webkit-backdrop-filter:blur(10px);';
+            debugBtn.onmouseover = function() {
+                debugBtn.style.background = 'rgba(255,149,0,0.25)';
+            };
+            debugBtn.onmouseout = function() {
+                debugBtn.style.background = 'rgba(255,149,0,0.15)';
+            };
+            debugBtn.onclick = function() {
+                showDebugConsole();
+            };
+            document.body.appendChild(debugBtn);
+            console.log('[DEBUG] 调试模式已启用，点击右上角 🐛 按钮查看控制台日志');
+        }
+    }).catch(function(e) {
+        // 忽略错误，非 DEBUG 模式不显示按钮
+    });
+
+    // 显示调试控制台弹窗
+    function showDebugConsole() {
+        // 移除旧弹窗
+        var oldModal = document.getElementById('debugConsoleModal');
+        if (oldModal) oldModal.remove();
+
+        var modal = document.createElement('div');
+        modal.id = 'debugConsoleModal';
+        modal.style.cssText =
+            'position:fixed;top:0;left:0;width:100vw;height:100vh;z-index:100000;' +
+            'display:flex;align-items:center;justify-content:center;';
+
+        var overlay = document.createElement('div');
+        overlay.style.cssText =
+            'position:absolute;top:0;left:0;width:100%;height:100%;' +
+            'background:rgba(0,0,0,0.5);backdrop-filter:blur(8px);' +
+            '-webkit-backdrop-filter:blur(8px);';
+        overlay.onclick = function() { modal.remove(); };
+
+        var card = document.createElement('div');
+        card.style.cssText =
+            'position:relative;background:var(--bg-base);border:1px solid var(--glass-border);' +
+            'box-shadow:0 20px 60px rgba(0,0,0,0.5);border-radius:28px;' +
+            'width:90%;max-width:700px;max-height:80vh;display:flex;flex-direction:column;' +
+            'transform:scale(0.85) translateY(20px);opacity:0;' +
+            'transition:all 0.4s cubic-bezier(0.34,1.56,0.64,1);';
+
+        // 标题栏
+        var header = document.createElement('div');
+        header.style.cssText =
+            'display:flex;align-items:center;justify-content:space-between;' +
+            'padding:24px 28px 0;flex-shrink:0;';
+        header.innerHTML =
+            '<div style="font-size:20px;font-weight:700;">🐛 JavaScript 控制台日志</div>' +
+            '<div style="display:flex;gap:8px;align-items:center;">' +
+                '<button id="debugWarnBtn" style="background:rgba(255,149,0,0.15);border:1px solid rgba(255,149,0,0.3);color:#ff9500;padding:6px 12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;" onclick="testJsWarn()">模拟前端出问题了</button>' +
+                '<button id="debugErrorBtn" style="background:rgba(255,59,48,0.15);border:1px solid rgba(255,59,48,0.3);color:#ff3b30;padding:6px 12px;border-radius:10px;cursor:pointer;font-size:12px;font-weight:600;transition:all 0.2s;" onclick="testJsError()">模拟前端炸了</button>' +
+                '<button id="debugClearBtn" style="background:rgba(120,120,128,0.1);border:none;color:var(--text-sec);padding:8px 14px;border-radius:10px;cursor:pointer;font-size:13px;font-weight:600;transition:all 0.2s;">清空</button>' +
+                '<button id="debugCloseBtn" style="background:rgba(120,120,128,0.1);border:none;color:var(--text-sec);width:32px;height:32px;border-radius:50%;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all 0.2s;">' +
+                    '<svg viewBox="0 0 24 24" style="width:20px;height:20px;fill:currentColor;"><path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/></svg>' +
+                '</button>' +
+            '</div>';
+
+        // 日志内容区域
+        var body = document.createElement('div');
+        body.id = 'debugLogBody';
+        body.style.cssText =
+            'padding:20px 28px 28px;overflow-y:auto;font-size:13px;line-height:1.6;' +
+            'font-family:"Courier New",monospace;white-space:pre-wrap;word-break:break-all;' +
+            'min-height:200px;max-height:calc(80vh - 80px);';
+
+        // 渲染日志
+        renderDebugLogs(body);
+
+        card.appendChild(header);
+        card.appendChild(body);
+        modal.appendChild(overlay);
+        modal.appendChild(card);
+        document.body.appendChild(modal);
+
+        // 入场动画
+        requestAnimationFrame(function() {
+            card.style.transform = 'scale(1) translateY(0)';
+            card.style.opacity = '1';
+        });
+
+        // 关闭按钮
+        document.getElementById('debugCloseBtn').onclick = function() { modal.remove(); };
+
+        // 清空按钮
+        document.getElementById('debugClearBtn').onclick = function() {
+            jsLogs = [];
+            body.textContent = '日志已清空';
+        };
+    }
+
+    // 渲染日志内容
+    function renderDebugLogs(body) {
+        if (jsLogs.length === 0) {
+            body.textContent = '暂无日志';
+            return;
+        }
+        var html = '';
+        for (var i = 0; i < jsLogs.length; i++) {
+            var log = jsLogs[i];
+            var color = 'var(--text-main)';
+            if (log.indexOf('[ERROR]') === 0 || log.indexOf('[UNCAUGHT]') === 0) {
+                color = '#ff3b30';
+            } else if (log.indexOf('[WARN]') === 0) {
+                color = '#ff9500';
+            } else if (log.indexOf('[INFO]') === 0) {
+                color = '#5ac8fa';
+            }
+            html += '<div style="color:' + color + ';padding:2px 0;">' + escapeHtml(log) + '</div>';
+        }
+        body.innerHTML = html;
+        body.scrollTop = body.scrollHeight;
+    }
+
+    // HTML 转义
+    function escapeHtml(text) {
+        var div = document.createElement('div');
+        div.appendChild(document.createTextNode(text));
+        return div.innerHTML;
+    }
+
+    // ====== 测试按钮：模拟前端警告和错误 ======
+    // 通过 console.warn/error 触发，会被重写后的 console 方法捕获
+    // 同时也会通过 confirm 传递到 Java 端，触发 JavaScriptWarnException / JavaScriptErrorException
+    function testJsWarn() {
+        console.warn('测试警告：前端好像有点问题（这是一个模拟警告）');
+        showToast('已触发前端警告测试，请查看 Java 控制台日志', 'info');
+    }
+
+    function testJsError() {
+        console.error('测试错误：前端炸了（这是一个模拟错误）');
+        showToast('已触发前端错误测试，请查看 Java 控制台日志', 'info');
+    }
+
     setTimeout(checkEula, 1000);
 </script>
-
-
-
-
-
 </body>
 </html>
 
