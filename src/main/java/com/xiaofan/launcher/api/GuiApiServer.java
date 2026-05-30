@@ -64,6 +64,7 @@ public class GuiApiServer {
     private ServerSocket serverSocket;
     private ExecutorService threadPool;
     private ScheduledExecutorService signScheduler;
+    private ScheduledExecutorService luckyDrawScheduler;
     private volatile boolean running = false;
     private volatile boolean debugMode = false;
     private Path staticRoot;
@@ -121,6 +122,11 @@ public class GuiApiServer {
                 startAutoSignScheduler();
             }
 
+            // 启动后检查是否开启了自动抽奖
+            if (readAutoLuckyDrawSetting()) {
+                startAutoLuckyDrawScheduler();
+            }
+
         } catch (IOException e) {
             LOG.severe("启动 GUI API 服务失败: " + e.getMessage());
         }
@@ -138,6 +144,8 @@ public class GuiApiServer {
         } catch (IOException e) {
             LOG.warning("关闭服务器套接字失败: " + e.getMessage());
         }
+        stopAutoSignScheduler();
+        stopAutoLuckyDrawScheduler();
         threadPool.shutdown();
     }
 
@@ -254,6 +262,16 @@ public class GuiApiServer {
                     response = handleAutoSignGet();
                 } else if ("POST".equalsIgnoreCase(method)) {
                     response = handleAutoSignSet(body);
+                } else {
+                    response = "{\"code\":405,\"message\":\"不支持的请求方法\"}";
+                }
+                sendJsonResponse(out, 200, response);
+            } else if ("/api/autoluckydraw".equals(path)) {
+                String response;
+                if ("GET".equalsIgnoreCase(method)) {
+                    response = handleAutoLuckyDrawGet();
+                } else if ("POST".equalsIgnoreCase(method)) {
+                    response = handleAutoLuckyDrawSet(body);
                 } else {
                     response = "{\"code\":405,\"message\":\"不支持的请求方法\"}";
                 }
@@ -2160,6 +2178,137 @@ public class GuiApiServer {
             LOG.info("[doAutoSign] 自动签到结果: " + maskSensitiveBody(result));
         } catch (Exception e) {
             LOG.severe("[doAutoSign] 自动签到失败: " + e.getMessage());
+        }
+    }
+
+    // ==================== 自动抽奖 ====================
+
+    /**
+     * 读取 setting.json 中的 autoLuckyDraw 状态
+     */
+    private boolean readAutoLuckyDrawSetting() {
+        try {
+            Path settingFile = resDir.resolve(SETTING_FILE_NAME);
+            if (!Files.exists(settingFile)) {
+                return false;
+            }
+            String content = new String(Files.readAllBytes(settingFile), StandardCharsets.UTF_8);
+            String val = extractJsonRaw(content, "autoLuckyDraw");
+            return "true".equals(val);
+        } catch (Exception e) {
+            LOG.warning("[readAutoLuckyDrawSetting] 读取失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 写入 setting.json 的 autoLuckyDraw 状态
+     */
+    private void writeAutoLuckyDrawSetting(boolean enabled) throws IOException {
+        Files.createDirectories(resDir);
+        String json = "{\"autoLuckyDraw\":" + enabled + "}";
+        Path settingFile = resDir.resolve(SETTING_FILE_NAME);
+        Files.write(settingFile, json.getBytes(StandardCharsets.UTF_8));
+        LOG.info("[writeAutoLuckyDrawSetting] 已写入: " + json);
+    }
+
+    /**
+     * 处理 GET /api/autoluckydraw - 获取自动抽奖状态
+     */
+    private String handleAutoLuckyDrawGet() {
+        boolean enabled = readAutoLuckyDrawSetting();
+        return "{\"code\":200,\"enabled\":" + enabled + "}";
+    }
+
+    /**
+     * 处理 POST /api/autoluckydraw - 设置自动抽奖
+     * Body: {"enabled": true} 或 {"enabled": false}
+     * 防抖：如果状态没有变化，直接返回成功，不做任何操作
+     */
+    private String handleAutoLuckyDrawSet(String body) {
+        try {
+            String enabledStr = extractJsonRaw(body, "enabled");
+            LOG.info("[handleAutoLuckyDrawSet] 收到请求 body=" + body + ", enabledStr=" + enabledStr);
+            if (enabledStr == null) {
+                return "{\"code\":400,\"message\":\"缺少 enabled 参数\"}";
+            }
+            boolean enabled = "true".equals(enabledStr);
+            LOG.info("[handleAutoLuckyDrawSet] 解析结果 enabled=" + enabled);
+
+            // 防抖：检查当前状态是否已经是要设置的状态
+            boolean currentEnabled = readAutoLuckyDrawSetting();
+            LOG.info("[handleAutoLuckyDrawSet] 当前状态 currentEnabled=" + currentEnabled + ", 要设置 enabled=" + enabled + ", 相等=" + (currentEnabled == enabled));
+            if (currentEnabled == enabled) {
+                LOG.info("[handleAutoLuckyDrawSet] 状态未变化，跳过: enabled=" + enabled);
+                return "{\"code\":200,\"message\":\"" + (enabled ? "自动抽奖已开启" : "自动抽奖已关闭") + "\"}";
+            }
+
+            writeAutoLuckyDrawSetting(enabled);
+
+            if (enabled) {
+                startAutoLuckyDrawScheduler();
+                LOG.info("[handleAutoLuckyDrawSet] 自动抽奖已开启");
+            } else {
+                stopAutoLuckyDrawScheduler();
+                LOG.info("[handleAutoLuckyDrawSet] 自动抽奖已关闭");
+            }
+
+            return "{\"code\":200,\"message\":\"" + (enabled ? "自动抽奖已开启" : "自动抽奖已关闭") + "\"}";
+        } catch (Exception e) {
+            LOG.severe("[handleAutoLuckyDrawSet] 设置失败: " + e.getMessage());
+            return "{\"code\":500,\"message\":\"设置失败: " + e.getMessage() + "\"}";
+        }
+    }
+
+    /**
+     * 启动自动抽奖定时器
+     * 每天凌晨 0:30 执行 10 连抽
+     */
+    private void startAutoLuckyDrawScheduler() {
+        stopAutoLuckyDrawScheduler(); // 先停止旧的
+        luckyDrawScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "auto-luckydraw-scheduler");
+            t.setDaemon(true);
+            return t;
+        });
+        // 计算到下次凌晨 0:30 的延迟时间
+        long now = System.currentTimeMillis();
+        java.util.Calendar calendar = java.util.Calendar.getInstance();
+        calendar.set(java.util.Calendar.HOUR_OF_DAY, 0);
+        calendar.set(java.util.Calendar.MINUTE, 30);
+        calendar.set(java.util.Calendar.SECOND, 0);
+        calendar.set(java.util.Calendar.MILLISECOND, 0);
+        // 如果当前时间已经过了今天的 0:30，则设置为明天的 0:30
+        if (calendar.getTimeInMillis() <= now) {
+            calendar.add(java.util.Calendar.DAY_OF_MONTH, 1);
+        }
+        long initialDelay = calendar.getTimeInMillis() - now;
+        long period = 24 * 60 * 60 * 1000L; // 24 小时
+        luckyDrawScheduler.scheduleAtFixedRate(this::doAutoLuckyDraw, initialDelay, period, TimeUnit.MILLISECONDS);
+        LOG.info("[startAutoLuckyDrawScheduler] 自动抽奖定时器已启动，将在 " + (initialDelay / 1000 / 60) + " 分钟后（凌晨 0:30）首次执行，之后每 24 小时执行一次");
+    }
+
+    /**
+     * 停止自动抽奖定时器
+     */
+    private void stopAutoLuckyDrawScheduler() {
+        if (luckyDrawScheduler != null && !luckyDrawScheduler.isShutdown()) {
+            luckyDrawScheduler.shutdownNow();
+            luckyDrawScheduler = null;
+            LOG.info("[stopAutoLuckyDrawScheduler] 自动抽奖定时器已停止");
+        }
+    }
+
+    /**
+     * 执行自动抽奖（10 连抽）
+     */
+    private void doAutoLuckyDraw() {
+        try {
+            LOG.info("[doAutoLuckyDraw] 开始自动抽奖（10 连抽）...");
+            String result = handleLuckyDraw("{\"count\":10}");
+            LOG.info("[doAutoLuckyDraw] 自动抽奖结果: " + maskSensitiveBody(result));
+        } catch (Exception e) {
+            LOG.severe("[doAutoLuckyDraw] 自动抽奖失败: " + e.getMessage());
         }
     }
 
