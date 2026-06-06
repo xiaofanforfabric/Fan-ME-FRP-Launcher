@@ -44,7 +44,6 @@ public class GuiMain {
     private GuiApiServer apiServer;
     private static final String INDEX_ZIP_URL = "http://oss.xiaofanshop.cn/index.zip";
     private static final String INDEX_ZIP_URL_CF = "https://oss.cf.xiaofanshop.cn/index.zip";
-    private static final String INDEX_ZIP_URL_DONATE = "https://oss.xiaoli.top/index.zip";
 
     public static void launchGui(String[] args) {
         // 从 args 中解析 --debug 参数
@@ -333,7 +332,6 @@ public class GuiMain {
     private boolean downloadIndexZip(Path targetPath) {
         String[] urls = {
             INDEX_ZIP_URL_CF,       // CF R2 OSS 存储节点（稳定）
-            INDEX_ZIP_URL_DONATE,   // xiaoli 捐赠节点（速度快）
             INDEX_ZIP_URL           // 官方 CF 穿透节点
         };
 

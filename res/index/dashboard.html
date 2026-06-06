@@ -341,6 +341,9 @@ input { user-select: auto; -webkit-user-select: auto; }
 .detail-row:last-child { border-bottom: none; }
 .detail-label { width: 100px; flex-shrink: 0; font-size: 13px; font-weight: 600; color: var(--text-sec); }
 .detail-value { flex: 1; font-size: 15px; font-weight: 500; color: var(--text-main); text-align: right; }
+.detail-value .copy-link-btn { background: none; border: none; cursor: pointer; padding: 2px 6px; margin-left: 6px; border-radius: 4px; color: var(--primary); font-size: 14px; vertical-align: middle; transition: all 0.2s; display: inline-flex; align-items: center; gap: 2px; }
+.detail-value .copy-link-btn:hover { background: var(--primary-light); transform: scale(1.1); }
+.detail-value .copy-link-btn:active { transform: scale(0.95); }
 
 /* 编辑隧道弹窗 */
 .proxy-edit-modal { position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; z-index: 10001; display: flex; align-items: center; justify-content: center; }
@@ -1879,7 +1882,7 @@ select.form-input { cursor: pointer; }
                     '<div class="detail-row"><div class="detail-label">本地端口</div><div class="detail-value">' + p.localPort + '</div></div>' +
                     '<div class="detail-row"><div class="detail-label">本地地址</div><div class="detail-value">' + escapeHtml(p.localIp) + '</div></div>' +
                     '<div class="detail-row"><div class="detail-label">节点名称</div><div class="detail-value">' + escapeHtml(nodeName) + '</div></div>' +
-                    '<div class="detail-row"><div class="detail-label">链接地址</div><div class="detail-value" style="font-family:monospace;font-size:13px;">' + escapeHtml(String(linkAddr)) + '</div></div>' +
+                    '<div class="detail-row"><div class="detail-label">链接地址</div><div class="detail-value" style="font-family:monospace;font-size:13px;">' + escapeHtml(String(linkAddr)) + '<button class="copy-link-btn" onclick="copyToClipboard(\'' + escapeHtml(String(linkAddr)) + '\')" title="复制链接地址">📋</button></div></div>' +
                     '<div class="detail-row"><div class="detail-label">上次启动时间</div><div class="detail-value" style="font-size:13px;color:var(--text-sec);">' + lastStart + '</div></div>' +
                     '<div class="detail-row"><div class="detail-label">上次关闭时间</div><div class="detail-value" style="font-size:13px;color:var(--text-sec);">' + lastClose + '</div></div>' +
                 '</div>' +
@@ -1975,7 +1978,14 @@ select.form-input { cursor: pointer; }
             }).then(function(data) {
                 if (data.code === 200) {
                     showToast('✅ 启动成功: ' + proxyName, 'success');
-                    loadProxyList();
+                    // 延迟刷新列表，等待 frpc 进程完全启动
+                    setTimeout(function() {
+                        loadProxyList();
+                    }, 1500);
+                    // 再延迟一次确保状态同步
+                    setTimeout(function() {
+                        loadProxyList();
+                    }, 3500);
                 } else {
                     showToast('❌ ' + (data.message || '启动失败'), 'error');
                 }
