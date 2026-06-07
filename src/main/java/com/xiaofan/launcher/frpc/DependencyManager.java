@@ -33,7 +33,6 @@ public class DependencyManager {
 
     private static final String OSS_BASE_URL = "http://oss.xiaofanshop.cn/";
     private static final String OSS_CF_R2_URL = "https://oss.cf.xiaofanshop.cn/";
-    private static final String OSS_DONATE_URL = "https://oss.xiaoli.top/";
     private static final String OSS_ALLIANCE_URL = "https://alist.yealqp.cn/download/Fan-ME-FRP-Launcher/";
     private static final String RES_DIR_NAME = "res";
     private static final int MAX_RETRY = 3;
@@ -647,25 +646,16 @@ public class DependencyManager {
 
         // 测试官方 CF 穿透节点（xiaofanshop，速度慢，更新最快）
         System.out.print("  测试节点 1 [官方 CF 穿透]: " + OSS_BASE_URL + " ... ");
-        if (testNode(OSS_BASE_URL, false)) {
+        if (testNode(OSS_BASE_URL)) {
             System.out.println("OK");
             availableNodes.add(new NodeInfo(OSS_BASE_URL, "官方 CF 穿透节点（xiaofanshop，速度慢，更新最快）"));
         } else {
             System.out.println("不可用");
         }
 
-        // 测试捐赠节点（xiaoli，速度快）— 启用内容检测，防攻击时 JS 验证劫持
-        System.out.print("  测试节点 2 [xiaoli 捐赠]: " + OSS_DONATE_URL + " ... ");
-        if (testNode(OSS_DONATE_URL, true)) {
-            System.out.println("OK");
-            availableNodes.add(new NodeInfo(OSS_DONATE_URL, "xiaoli 捐赠节点（速度快）"));
-        } else {
-            System.out.println("不可用");
-        }
-
         // 测试 CF R2 OSS 存储节点（稳定）
-        System.out.print("  测试节点 3 [CF R2 OSS]: " + OSS_CF_R2_URL + " ... ");
-        if (testNode(OSS_CF_R2_URL, false)) {
+        System.out.print("  测试节点 2 [CF R2 OSS]: " + OSS_CF_R2_URL + " ... ");
+        if (testNode(OSS_CF_R2_URL)) {
             System.out.println("OK");
             availableNodes.add(new NodeInfo(OSS_CF_R2_URL, "CF R2 OSS 存储节点（稳定）"));
         } else {
@@ -673,8 +663,8 @@ public class DependencyManager {
         }
 
         // 测试第三方客户端联盟节点（yealqp）
-        System.out.print("  测试节点 4 [第三方客户端联盟]: " + OSS_ALLIANCE_URL + " ... ");
-        if (testNode(OSS_ALLIANCE_URL, false)) {
+        System.out.print("  测试节点 3 [第三方客户端联盟]: " + OSS_ALLIANCE_URL + " ... ");
+        if (testNode(OSS_ALLIANCE_URL)) {
             System.out.println("OK");
             availableNodes.add(new NodeInfo(OSS_ALLIANCE_URL, "第三方客户端联盟节点（yealqp）"));
         } else {
@@ -687,9 +677,8 @@ public class DependencyManager {
     /**
      * 测试节点可用性
      * @param nodeUrl 节点地址
-     * @param checkContent 是否检测响应内容（仅 xiaoli 捐赠节点启用，该 CDN 被攻击时会返回 JS 验证页但状态码 200）
      */
-    private boolean testNode(String nodeUrl, boolean checkContent) {
+    private boolean testNode(String nodeUrl) {
         try {
             URL url = new URL(nodeUrl);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
@@ -707,31 +696,7 @@ public class DependencyManager {
                 return false;
             }
 
-            // 仅对 xiaoli 捐赠节点启用内容检测
-            if (checkContent) {
-                boolean isHtmlResponse = false;
-                try (InputStream is = conn.getInputStream()) {
-                    byte[] header = new byte[256];
-                    int bytesRead = is.read(header);
-                    if (bytesRead > 0) {
-                        String headStr = new String(header, 0, bytesRead, java.nio.charset.StandardCharsets.UTF_8).trim().toLowerCase();
-                        if (headStr.startsWith("<!doctype") || headStr.startsWith("<html") 
-                            || headStr.startsWith("<script") || headStr.contains("function(")
-                            || headStr.contains("location.href") || headStr.contains("document.cookie")) {
-                            isHtmlResponse = true;
-                        }
-                    }
-                } finally {
-                    conn.disconnect();
-                }
-                if (isHtmlResponse) {
-                    System.out.println("（节点返回了 JS/HTML 验证页，可能遭受攻击）");
-                    return false;
-                }
-            } else {
-                conn.disconnect();
-            }
-
+            conn.disconnect();
             return true;
         } catch (Exception e) {
             return false;
